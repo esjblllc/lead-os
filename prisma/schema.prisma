@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  buyers    Buyer[]
+  campaigns Campaign[]
+  leads     Lead[]
+  suppliers Supplier[]
+}
+
+model Buyer {
+  id               String   @id @default(uuid())
+  organizationId   String
+  name             String
+  companyName      String?
+  contactName      String?
+  email            String?
+  webhookUrl       String?
+  pingUrl          String?
+  postUrl          String?
+  timeoutMs        Int?     @default(1500)
+  minBid           Decimal? @db.Decimal(10, 2)
+  status           String
+  pricePerLead     Decimal? @db.Decimal(10, 2)
+  acceptedStates   String?
+  requiredFields   String?
+  notes            String?
+
+  acceptanceMode   String   @default("standard")
+  acceptancePath   String?
+  acceptanceValue  String?
+  payoutPath       String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization     Organization    @relation(fields: [organizationId], references: [id])
+  campaignLinks    CampaignBuyer[]
+  assignedLeads    Lead[]
+  deliveries       Delivery[]
+  pingResults      PingResult[]
+}
+
+model Supplier {
+  id                String   @id @default(uuid())
+  organizationId    String
+  name              String
+  companyName       String?
+  contactName       String?
+  email             String?
+  trafficSource     String?
+  defaultCost       Decimal? @db.Decimal(10, 2)
+  apiKey            String   @unique
+  status            String
+  acceptedVerticals String?
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  leads        Lead[]
+}
+
+model Campaign {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  slug           String   @unique
+  vertical       String
+  routingMode    String
+  status         String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  buyerLinks   CampaignBuyer[]
+  leads        Lead[]
+}
+
+model CampaignBuyer {
+  id         String   @id @default(uuid())
+  campaignId String
+  buyerId    String
+  priority   Int      @default(1)
+  createdAt  DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  buyer    Buyer    @relation(fields: [buyerId], references: [id])
+
+  @@unique([campaignId, buyerId])
+}
+
+model Lead {
+  id              String   @id @default(uuid())
+  organizationId  String
+  campaignId      String
+  assignedBuyerId String?
+  supplierId      String?
+  firstName       String?
+  lastName        String?
+  email           String?
+  phone           String?
+  state           String?
+  zip             String?
+  source          String?
+  subId           String?
+  publisherId     String?
+  cost            Decimal? @db.Decimal(10, 2)
+  profit          Decimal? @db.Decimal(10, 2)
+  marginPct       Decimal? @db.Decimal(10, 2)
+  routingStatus   String   @default("pending")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization  Organization @relation(fields: [organizationId], references: [id])
+  campaign      Campaign     @relation(fields: [campaignId], references: [id])
+  assignedBuyer Buyer?       @relation(fields: [assignedBuyerId], references: [id])
+  supplier      Supplier?    @relation(fields: [supplierId], references: [id])
+  deliveries    Delivery[]
+  pingResults   PingResult[]
+}
+
+model Delivery {
+  id            String   @id @default(uuid())
+  leadId        String
+  buyerId       String
+  status        String
+  response      String?
+  statusCode    Int?
+  attemptNumber Int      @default(1)
+  createdAt     DateTime @default(now())
+
+  lead  Lead  @relation(fields: [leadId], references: [id])
+  buyer Buyer @relation(fields: [buyerId], references: [id])
+}
+
+model PingResult {
+  id        String   @id @default(uuid())
+  leadId    String
+  buyerId   String
+  status    String
+  bid       Decimal? @db.Decimal(10, 2)
+  won       Boolean  @default(false)
+  response  String?
+  error     String?
+  createdAt DateTime @default(now())
+
+  lead  Lead  @relation(fields: [leadId], references: [id])
+  buyer Buyer @relation(fields: [buyerId], references: [id])
+}
