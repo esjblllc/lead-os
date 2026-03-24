@@ -23,6 +23,18 @@ type RangeOption = {
   label: string;
 };
 
+function formatEasternDateTime(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(value);
+}
+
 function getPresetStartDate(range: string) {
   const now = new Date();
 
@@ -41,13 +53,33 @@ function getPresetStartDate(range: string) {
   return null;
 }
 
+function getEasternDayRange(dateString: string, endOfDay = false) {
+  const suffix = endOfDay ? "T23:59:59.999" : "T00:00:00.000";
+  const local = new Date(`${dateString}${suffix}`);
+
+  const easternString = local.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+  });
+
+  const easternDate = new Date(easternString);
+  const diffMs = local.getTime() - easternDate.getTime();
+
+  return new Date(local.getTime() + diffMs);
+}
+
 function getDateBounds(range: string, from?: string, to?: string) {
   if (from || to) {
     return {
-      startDate: from ? new Date(`${from}T00:00:00`) : null,
-      endDate: to ? new Date(`${to}T23:59:59.999`) : null,
+      startDate: from ? getEasternDayRange(from, false) : null,
+      endDate: to ? getEasternDayRange(to, true) : null,
     };
   }
+
+  return {
+    startDate: getPresetStartDate(range),
+    endDate: null,
+  };
+}
 
   return {
     startDate: getPresetStartDate(range),
@@ -424,7 +456,7 @@ export default async function LogsPage({
                     className="border-t border-gray-100 align-top hover:bg-gray-50"
                   >
                     <td className="px-4 py-4 text-gray-500">
-                      {event.timestamp.toLocaleString()}
+                      {formatEasternDateTime(event.timestamp)}
                     </td>
 
                     <td className="px-4 py-4">
