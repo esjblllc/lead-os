@@ -145,19 +145,19 @@ export default async function MonitoringPage() {
   );
 
   const deliveryFailureCampaigns = buildCountRows(
-    failedDeliveries.map((d) => d.lead.campaign?.name || "Unknown Campaign")
+    failedDeliveries.map((d: any) => d.lead.campaign?.name || "Unknown Campaign")
   );
 
   const deliveryFailureBuyers = buildCountRows(
-    failedDeliveries.map((d) => d.buyer?.name || "Unknown Buyer")
+    failedDeliveries.map((d: any) => d.buyer?.name || "Unknown Buyer")
   );
 
   const pingFailureCampaigns = buildCountRows(
-    failedPings.map((p) => p.lead.campaign?.name || "Unknown Campaign")
+    failedPings.map((p: any) => p.lead.campaign?.name || "Unknown Campaign")
   );
 
   const pingFailureBuyers = buildCountRows(
-    failedPings.map((p) => p.buyer?.name || "Unknown Buyer")
+    failedPings.map((p: any) => p.buyer?.name || "Unknown Buyer")
   );
 
   const totalRecentDeliveries = recentDeliveries.length;
