@@ -242,7 +242,7 @@ export default async function MonitoringPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {failedDeliveries.map((delivery) => (
+                  {failedDeliveries.map((delivery: any) => (
                     <tr
                       key={delivery.id}
                       className="border-t border-gray-100 hover:bg-gray-50"
@@ -294,7 +294,7 @@ export default async function MonitoringPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {failedPings.map((ping) => (
+                  {failedPings.map((ping: any) => (
                     <tr
                       key={ping.id}
                       className="border-t border-gray-100 hover:bg-gray-50"
