@@ -302,9 +302,9 @@ export default async function AccountingPage({
     }))
   );
 
-  const totalRevenue = normalized.reduce((sum, row: any) => sum + row.revenue, 0);
-  const totalCost = normalized.reduce((sum, row: any) => sum + row.cost, 0);
-  const totalProfit = normalized.reduce((sum, row: any) => sum + row.profit, 0);
+  const totalRevenue = normalized.reduce((sum: number, row: any) => sum + row.revenue, 0);
+  const totalCost = normalized.reduce((sum: number, row: any) => sum + row.cost, 0);
+  const totalProfit = normalized.reduce((sum: number, row: any) => sum + row.profit, 0);
   const totalMargin =
     totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : null;
 
