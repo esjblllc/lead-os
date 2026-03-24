@@ -30,10 +30,10 @@ export default async function InboundPage({
   ]);
 
   const selectedSupplier =
-    suppliers.find((s) => s.id === params.supplierId) || suppliers[0] || null;
+    suppliers.find((s: any) => s.id === params.supplierId) || suppliers[0] || null;
 
   const selectedCampaign =
-    campaigns.find((c) => c.id === params.campaignId) || campaigns[0] || null;
+    campaigns.find((c: any) => c.id === params.campaignId) || campaigns[0] || null;
 
   const endpointPath = "/api/inbound/leads";
   const campaignSlug = selectedCampaign?.slug || "your-campaign-slug";
