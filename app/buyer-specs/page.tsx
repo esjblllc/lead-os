@@ -21,7 +21,7 @@ export default async function BuyerSpecsPage({
   });
 
   const selectedBuyer =
-    buyers.find((b) => b.id === params.buyerId) || buyers[0] || null;
+    buyers.find((b: any) => b.id === params.buyerId) || buyers[0] || null;
 
   const pingPayload = {
     zip: "11746",
