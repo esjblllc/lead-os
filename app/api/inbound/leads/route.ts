@@ -11,6 +11,7 @@ type BuyerForRouting = {
   timeoutMs: number | null;
   minBid: any;
   pricePerLead: any;
+  dailyCap?: number | null;
   acceptanceMode: string;
   acceptancePath: string | null;
   acceptanceValue: string | null;
@@ -198,6 +199,67 @@ function buyerHasRequiredFields(buyer: BuyerForRouting, body: any) {
   });
 }
 
+function getEasternDayStartUtc() {
+  const now = new Date();
+
+  const easternDateString = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+
+  const localMidnight = new Date(`${easternDateString}T00:00:00.000`);
+  const easternMidnightString = localMidnight.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+  });
+  const easternMidnightAsLocal = new Date(easternMidnightString);
+  const diffMs = localMidnight.getTime() - easternMidnightAsLocal.getTime();
+
+  return new Date(localMidnight.getTime() + diffMs);
+}
+
+async function applyDailyCapFilter(links: EligibleBuyerLink[]) {
+  if (links.length === 0) return links;
+
+  const dayStart = getEasternDayStartUtc();
+  const buyerIds = links.map((link) => link.buyer.id);
+
+  const assignedToday = await db.lead.groupBy({
+    by: ["assignedBuyerId"],
+    where: {
+      assignedBuyerId: { in: buyerIds },
+      routingStatus: "assigned",
+      createdAt: { gte: dayStart },
+    },
+    _count: {
+      assignedBuyerId: true,
+    },
+  });
+
+  const countMap = new Map<string, number>();
+  for (const row of assignedToday) {
+    if (row.assignedBuyerId) {
+      countMap.set(row.assignedBuyerId, row._count.assignedBuyerId);
+    }
+  }
+
+  return links.filter((link) => {
+    const cap =
+      link.buyer.dailyCap !== null &&
+      typeof link.buyer.dailyCap !== "undefined"
+        ? Number(link.buyer.dailyCap)
+        : null;
+
+    if (cap === null || Number.isNaN(cap) || cap <= 0) {
+      return true;
+    }
+
+    const currentCount = countMap.get(link.buyer.id) ?? 0;
+    return currentCount < cap;
+  });
+}
+
 async function getBuyerPerformanceScores(
   buyerIds: string[],
   fallbackBuyers: BuyerForRouting[]
@@ -379,9 +441,7 @@ async function handlePing(
   } catch (error: any) {
     const timeoutLike =
       error?.name === "AbortError" ||
-      String(error?.message || "")
-        .toLowerCase()
-        .includes("aborted");
+      String(error?.message || "").toLowerCase().includes("aborted");
 
     return {
       accepted: false,
@@ -469,9 +529,7 @@ async function handlePost(
   } catch (error: any) {
     const timeoutLike =
       error?.name === "AbortError" ||
-      String(error?.message || "")
-        .toLowerCase()
-        .includes("aborted");
+      String(error?.message || "").toLowerCase().includes("aborted");
 
     return {
       accepted: false,
@@ -578,6 +636,7 @@ export async function POST(req: NextRequest) {
             timeoutMs: true,
             minBid: true,
             pricePerLead: true,
+            dailyCap: true,
             acceptanceMode: true,
             acceptancePath: true,
             acceptanceValue: true,
@@ -616,6 +675,17 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const capEligibleBuyerLinks = await applyDailyCapFilter(eligibleBuyerLinks);
+
+    if (capEligibleBuyerLinks.length === 0) {
+      return Response.json({
+        success: true,
+        leadId: lead.id,
+        routingStatus: "pending",
+        message: "All eligible buyers are capped for today",
+      });
+    }
+
     const leadCost = toNumber(lead.cost);
 
     if (campaign.routingMode === "ping_post") {
@@ -625,7 +695,7 @@ export async function POST(req: NextRequest) {
         priority: number;
       }[] = [];
 
-      for (const link of eligibleBuyerLinks) {
+      for (const link of capEligibleBuyerLinks) {
         const buyer = link.buyer;
 
         const pingResult = await handlePing(req, buyer, lead.id, body, campaign);
@@ -769,13 +839,13 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const directBuyers = eligibleBuyerLinks.map((link) => link.buyer);
+    const directBuyers = capEligibleBuyerLinks.map((link) => link.buyer);
     const directBuyerScores = await getBuyerPerformanceScores(
       directBuyers.map((buyer) => buyer.id),
       directBuyers
     );
 
-    const rankedDirectLinks = [...eligibleBuyerLinks].sort((a, b) => {
+    const rankedDirectLinks = [...capEligibleBuyerLinks].sort((a, b) => {
       const scoreA = directBuyerScores.get(a.buyer.id) ?? 0;
       const scoreB = directBuyerScores.get(b.buyer.id) ?? 0;
 
