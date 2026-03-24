@@ -247,7 +247,10 @@ export default async function PerformancePage({
       : undefined;
 
   const leads = await db.lead.findMany({
-    where,
+    where, {
+        ...where,
+        routingStatus: "assigned",
+    }
     orderBy: { createdAt: "desc" },
     include: {
       campaign: true,
@@ -257,7 +260,7 @@ export default async function PerformancePage({
   });
 
   const normalized = leads.map((lead: any) => {
-    const revenue = toNumber(lead.assignedBuyer?.pricePerLead);
+    const revenue = cost + profit;
     const cost = toNumber(lead.cost);
     const profit = toNumber(lead.profit);
 
