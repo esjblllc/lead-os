@@ -183,8 +183,8 @@ export default async function DashboardPage({
 
   const recentFailures = [
     ...deliveries
-      .filter((d) => d.status !== "success")
-      .map((d) => ({
+      .filter((d: any) => d.status !== "success")
+      .map((d: any) => ({
         id: d.id,
         time: d.createdAt,
         type: "delivery",
@@ -194,10 +194,10 @@ export default async function DashboardPage({
         status: d.status,
       })),
     ...pings
-      .filter((p) =>
+      .filter((p: any) =>
         ["error", "timeout", "invalid_response"].includes(p.status)
       )
-      .map((p) => ({
+      .map((p: any) => ({
         id: p.id,
         time: p.createdAt,
         type: "ping",
