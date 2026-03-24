@@ -139,8 +139,8 @@ export default async function MonitoringPage() {
     }),
   ]);
 
-  const failedDeliveries = recentDeliveries.filter((d) => d.status !== "success");
-  const failedPings = recentPings.filter((p) =>
+  const failedDeliveries = recentDeliveries.filter((d: any) => d.status !== "success");
+  const failedPings = recentPings.filter((p: any) =>
     ["error", "timeout", "invalid_response"].includes(p.status)
   );
 
