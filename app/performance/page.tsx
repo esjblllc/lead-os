@@ -236,21 +236,21 @@ export default async function PerformancePage({
 
   const { startDate, endDate } = getDateBounds(range, from, to);
 
-  const where =
+  const leadsWhere =
     startDate || endDate
       ? {
           createdAt: {
             ...(startDate ? { gte: startDate } : {}),
             ...(endDate ? { lte: endDate } : {}),
           },
+          routingStatus: "assigned",
         }
-      : undefined;
+      : {
+          routingStatus: "assigned",
+        };
 
   const leads = await db.lead.findMany({
-    where, {
-        ...where,
-        routingStatus: "assigned",
-    }
+    where: leadsWhere,
     orderBy: { createdAt: "desc" },
     include: {
       campaign: true,
@@ -260,9 +260,9 @@ export default async function PerformancePage({
   });
 
   const normalized = leads.map((lead: any) => {
-    const revenue = cost + profit;
     const cost = toNumber(lead.cost);
     const profit = toNumber(lead.profit);
+    const revenue = cost + profit;
 
     return {
       campaign: lead.campaign?.name || "unknown",
@@ -322,9 +322,18 @@ export default async function PerformancePage({
   );
 
   const totalLeads = leads.length;
-  const totalRevenue = normalized.reduce((sum: number, row: any) => sum + row.revenue, 0);
-  const totalCost = normalized.reduce((sum: number, row: any) => sum + row.cost, 0);
-  const totalProfit = normalized.reduce((sum: number, row: any) => sum + row.profit, 0);
+  const totalRevenue = normalized.reduce(
+    (sum: number, row: any) => sum + row.revenue,
+    0
+  );
+  const totalCost = normalized.reduce(
+    (sum: number, row: any) => sum + row.cost,
+    0
+  );
+  const totalProfit = normalized.reduce(
+    (sum: number, row: any) => sum + row.profit,
+    0
+  );
   const totalMargin =
     totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : null;
 
@@ -520,7 +529,7 @@ export default async function PerformancePage({
             items={[
               {
                 label: "Revenue Source",
-                value: "Assigned buyer pricePerLead",
+                value: "Derived from cost + profit on assigned leads",
               },
               {
                 label: "Cost Source",
@@ -532,7 +541,7 @@ export default async function PerformancePage({
               },
               {
                 label: "Grouping Logic",
-                value: "Aggregated from filtered lead set",
+                value: "Aggregated from assigned leads in the filtered set",
               },
               {
                 label: "Date Filter Mode",
