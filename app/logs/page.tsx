@@ -23,18 +23,6 @@ type RangeOption = {
   label: string;
 };
 
-function formatEasternDateTime(value: Date) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(value);
-}
-
 function getPresetStartDate(range: string) {
   const now = new Date();
 
@@ -110,19 +98,19 @@ function StatCard({
     tone === "blue"
       ? "from-white to-blue-50"
       : tone === "indigo"
-      ? "from-white to-indigo-50"
-      : tone === "red"
-      ? "from-white to-red-50"
-      : "from-white to-gray-50";
+        ? "from-white to-indigo-50"
+        : tone === "red"
+          ? "from-white to-red-50"
+          : "from-white to-gray-50";
 
   const valueClass =
     tone === "blue"
       ? "text-blue-700"
       : tone === "indigo"
-      ? "text-indigo-700"
-      : tone === "red"
-      ? "text-red-700"
-      : "text-gray-900";
+        ? "text-indigo-700"
+        : tone === "red"
+          ? "text-red-700"
+          : "text-gray-900";
 
   return (
     <div
@@ -153,8 +141,8 @@ function StatusBadge({ status }: { status: string }) {
   const className = ["success", "accepted"].includes(status)
     ? "bg-green-100 text-green-800"
     : ["failed", "error", "timeout", "invalid_response"].includes(status)
-    ? "bg-red-100 text-red-800"
-    : "bg-gray-200 text-gray-800";
+      ? "bg-red-100 text-red-800"
+      : "bg-gray-200 text-gray-800";
 
   return (
     <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${className}`}>
