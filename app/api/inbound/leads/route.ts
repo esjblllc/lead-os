@@ -15,6 +15,8 @@ type BuyerForRouting = {
   acceptancePath: string | null;
   acceptanceValue: string | null;
   payoutPath: string | null;
+  acceptedStates?: string | null;
+  requiredFields?: string | null;
 };
 
 function toNumber(value: unknown) {
@@ -160,6 +162,127 @@ function buildPostPayload(
     routingStatus: "assigned",
     createdAt: new Date().toISOString(),
   };
+}
+
+function parseCsvList(value: string | null | undefined) {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((item) => item.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function buyerAllowsLeadState(buyer: BuyerForRouting, state: string | null | undefined) {
+  const allowedStates = parseCsvList((buyer as any).acceptedStates);
+  if (allowedStates.length === 0) return true;
+  if (!state) return false;
+  return allowedStates.includes(String(state).toUpperCase());
+}
+
+function buyerHasRequiredFields(buyer: BuyerForRouting, body: any) {
+  const requiredFields = parseCsvList((buyer as any).requiredFields);
+  if (requiredFields.length === 0) return true;
+
+  return requiredFields.every((field) => {
+    const key = field.charAt(0).toLowerCase() + field.slice(1).toLowerCase();
+    const value = body[key];
+    return value !== null && typeof value !== "undefined" && value !== "";
+  });
+}
+
+async function getBuyerPerformanceScores(
+  buyerIds: string[],
+  fallbackBuyers: BuyerForRouting[]
+) {
+  if (buyerIds.length === 0) {
+    return new Map<string, number>();
+  }
+
+  const windowStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const recentDeliveries = await db.delivery.findMany({
+    where: {
+      buyerId: { in: buyerIds },
+      createdAt: { gte: windowStart },
+    },
+    include: {
+      lead: {
+        select: {
+          assignedBuyerId: true,
+          cost: true,
+          profit: true,
+        },
+      },
+    },
+  });
+
+  const grouped = new Map<
+    string,
+    {
+      total: number;
+      success: number;
+      failed: number;
+      realizedRevenueTotal: number;
+      realizedRevenueCount: number;
+    }
+  >();
+
+  for (const buyerId of buyerIds) {
+    grouped.set(buyerId, {
+      total: 0,
+      success: 0,
+      failed: 0,
+      realizedRevenueTotal: 0,
+      realizedRevenueCount: 0,
+    });
+  }
+
+  for (const delivery of recentDeliveries) {
+    const stats = grouped.get(delivery.buyerId);
+    if (!stats) continue;
+
+    stats.total += 1;
+
+    if (delivery.status === "success") {
+      stats.success += 1;
+
+      const cost = toNumber(delivery.lead?.cost);
+      const profit = toNumber(delivery.lead?.profit);
+      const realizedRevenue = cost + profit;
+
+      if (realizedRevenue > 0) {
+        stats.realizedRevenueTotal += realizedRevenue;
+        stats.realizedRevenueCount += 1;
+      }
+    } else {
+      stats.failed += 1;
+    }
+  }
+
+  const scoreMap = new Map<string, number>();
+
+  for (const buyer of fallbackBuyers) {
+    const stats = grouped.get(buyer.id);
+
+    if (!stats || stats.total === 0) {
+      scoreMap.set(buyer.id, toNumber(buyer.pricePerLead));
+      continue;
+    }
+
+    const acceptanceRate = stats.success / stats.total;
+    const failureRate = stats.failed / stats.total;
+
+    const avgRevenue =
+      stats.realizedRevenueCount > 0
+        ? stats.realizedRevenueTotal / stats.realizedRevenueCount
+        : toNumber(buyer.pricePerLead);
+
+    const score = avgRevenue * acceptanceRate - failureRate * 5;
+
+    scoreMap.set(buyer.id, score);
+  }
+
+  return scoreMap;
 }
 
 async function handlePing(
@@ -441,6 +564,8 @@ export async function POST(req: NextRequest) {
             acceptancePath: true,
             acceptanceValue: true,
             payoutPath: true,
+            acceptedStates: true,
+            requiredFields: true,
           },
         },
       },
@@ -455,6 +580,24 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    cost eligibleBuyerLinks = linkedBuyers.filter((link) => {
+        cost buyer = link.buyer;
+
+        return (
+            buyerAllowsLeadState(buyer, body.state) &&
+            buyerHasRequiredFields(buyer, body)
+        );
+    });
+
+    if (eligibleBuyerLinks.length === 0) {
+        return Response.json({
+            success: true
+            leadID: lead.id,
+            routingStatus: "pending",
+            message: "No eligible buyers matched lead requirements",
+        });
+    }
+
     const leadCost = toNumber(lead.cost);
 
     // ---------------------------
@@ -467,7 +610,7 @@ export async function POST(req: NextRequest) {
         priority: number;
       }[] = [];
 
-      for (const link of linkedBuyers) {
+      for (const link of eligibleBuyerLinks) {
         const buyer = link.buyer;
 
         const pingResult = await handlePing(req, buyer, lead.id, body, campaign);
@@ -517,10 +660,21 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const orderedCandidates = [...acceptedPings].sort((a, b) => {
-        if (b.bid !== a.bid) return b.bid - a.bid;
-        return a.priority - b.priority;
-      });
+      const buyerPerformanceScores = await getBuyerPerformanceScores(
+        acceptedPings.map((item) => item.buyer.id),
+        acceptedPings.map((item) => item.buyer)
+        );
+
+    const orderedCandidates = [...acceptedPings].sort((a, b) => {
+     if (b.bid !== a.bid) return b.bid - a.bid;
+
+    const scoreA = buyerPerformanceScores.get(a.buyer.id) ?? 0;
+    const scoreB = buyerPerformanceScores.get(b.buyer.id) ?? 0;
+
+    if (scoreB !== scoreA) return scoreB - scoreA;
+
+    return a.priority - b.priority;
+});
 
       for (const candidate of orderedCandidates) {
         await db.pingResult.updateMany({
@@ -603,7 +757,23 @@ export async function POST(req: NextRequest) {
     // ---------------------------
     // DIRECT POST / ROUND ROBIN
     // ---------------------------
-    for (const link of linkedBuyers) {
+    const directBuyers = eligibleBuyerLinks.map((link) => link.buyer);
+    const directBuyerScores = await getBuyerPerformanceScores(
+        directBuyers.map((buyer) => buyer.id),
+        directBuyers
+);
+
+    const rankedDirectLinks = [...eligibleBuyerLinks].sort((a, b) => {
+        const scoreA = directBuyerScores.get(a.buyer.id) ?? 0;
+        const scoreB = directBuyerScores.get(b.buyer.id) ?? 0;
+
+        if (scoreB !== scoreA) return scoreB - scoreA;
+
+        return a.priority - b.priority;
+        });
+
+        for (const link of rankedDirectLinks) {
+            
       const buyer = link.buyer;
 
       const postResult = await handlePost(req, buyer, lead.id, body, campaign);
@@ -648,7 +818,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      if (campaign.routingMode === "direct_post") {
+      if (campaign.routingMode === "direct_post" && !campaign.allowFallback) {
         break;
       }
     }
