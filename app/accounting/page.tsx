@@ -260,7 +260,7 @@ export default async function AccountingPage({
     },
   });
 
-  const normalized = leads.map((lead) => {
+  const normalized = leads.map((lead: any) => {
     const revenue = toNumber(lead.assignedBuyer?.pricePerLead);
     const cost = toNumber(lead.cost);
     const profit = toNumber(lead.profit);
