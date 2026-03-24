@@ -15,10 +15,10 @@ function base64UrlDecode(value: string) {
 }
 
 async function getSigningKey() {
-  const secret = process.env.AUTH_SECRET;
+  const secret = process.env.SESSION_SECRET;
 
   if (!secret) {
-    throw new Error("AUTH_SECRET is not set in .env");
+    throw new Error("SESSION_SECRET is not set in .env");
   }
 
   return crypto.subtle.importKey(
