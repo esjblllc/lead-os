@@ -81,10 +81,16 @@ function getDateBounds(range: string, from?: string, to?: string) {
   };
 }
 
-  return {
-    startDate: getPresetStartDate(range),
-    endDate: null,
-  };
+function formatEasternDateTime(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(value);
 }
 
 function truncateId(value: string) {
