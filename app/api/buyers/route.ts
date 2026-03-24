@@ -35,6 +35,7 @@ export async function POST(req: Request) {
       minBid,
       status,
       pricePerLead,
+      dailyCap,
       acceptedStates,
       requiredFields,
       notes,
@@ -80,6 +81,12 @@ export async function POST(req: Request) {
           pricePerLead !== null &&
           pricePerLead !== ""
             ? Number(pricePerLead)
+            : null,
+        dailyCap:
+          typeof dailyCap !== "undefined" &&
+          dailyCap !== null &&
+          dailyCap !== ""
+            ? Number(dailyCap)
             : null,
         acceptedStates,
         requiredFields,

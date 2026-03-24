@@ -17,6 +17,7 @@ type Buyer = {
   minBid?: string | number | null;
   status: string;
   pricePerLead?: string | number | null;
+  dailyCap?: number | null;
   acceptedStates?: string | null;
   requiredFields?: string | null;
   notes?: string | null;
@@ -38,6 +39,7 @@ type BuyerDraft = {
   minBid: string;
   status: string;
   pricePerLead: string;
+  dailyCap: string;
   acceptedStates: string;
   requiredFields: string;
   notes: string;
@@ -59,6 +61,7 @@ type NewBuyerForm = {
   minBid: string;
   status: string;
   pricePerLead: string;
+  dailyCap: string;
   acceptedStates: string;
   requiredFields: string;
   notes: string;
@@ -123,6 +126,7 @@ export default function BuyersPage() {
     minBid: "",
     status: "active",
     pricePerLead: "",
+    dailyCap: "",
     acceptedStates: "",
     requiredFields: "",
     notes: "",
@@ -164,6 +168,10 @@ export default function BuyersPage() {
           buyer.pricePerLead !== null &&
           typeof buyer.pricePerLead !== "undefined"
             ? String(buyer.pricePerLead)
+            : "",
+        dailyCap:
+          buyer.dailyCap !== null && typeof buyer.dailyCap !== "undefined"
+            ? String(buyer.dailyCap)
             : "",
         acceptedStates: buyer.acceptedStates || "",
         requiredFields: buyer.requiredFields || "",
@@ -250,6 +258,8 @@ export default function BuyersPage() {
           status: newBuyer.status,
           pricePerLead:
             newBuyer.pricePerLead === "" ? null : Number(newBuyer.pricePerLead),
+          dailyCap:
+            newBuyer.dailyCap === "" ? null : Number(newBuyer.dailyCap),
           acceptedStates: newBuyer.acceptedStates || null,
           requiredFields: newBuyer.requiredFields || null,
           notes: newBuyer.notes || null,
@@ -280,6 +290,7 @@ export default function BuyersPage() {
         minBid: "",
         status: "active",
         pricePerLead: "",
+        dailyCap: "",
         acceptedStates: "",
         requiredFields: "",
         notes: "",
@@ -313,6 +324,7 @@ export default function BuyersPage() {
           minBid: draft.minBid === "" ? null : Number(draft.minBid),
           pricePerLead:
             draft.pricePerLead === "" ? null : Number(draft.pricePerLead),
+          dailyCap: draft.dailyCap === "" ? null : Number(draft.dailyCap),
           acceptancePath: draft.acceptancePath || null,
           acceptanceValue: draft.acceptanceValue || null,
           payoutPath: draft.payoutPath || null,
@@ -395,6 +407,7 @@ export default function BuyersPage() {
       draft.minBid !== normalize(buyer.minBid) ||
       draft.status !== normalize(buyer.status) ||
       draft.pricePerLead !== normalize(buyer.pricePerLead) ||
+      draft.dailyCap !== normalize(buyer.dailyCap) ||
       draft.acceptedStates !== normalize(buyer.acceptedStates) ||
       draft.requiredFields !== normalize(buyer.requiredFields) ||
       draft.notes !== normalize(buyer.notes) ||
@@ -437,8 +450,7 @@ export default function BuyersPage() {
             Buyer Management
           </h1>
           <p className="mt-2 text-sm text-gray-500">
-            Manage buyer onboarding, commercial terms, ping/post endpoints, and
-            response parsing rules.
+            Manage buyer onboarding, commercial terms, ping/post endpoints, response parsing, and daily caps.
           </p>
         </div>
 
@@ -453,7 +465,7 @@ export default function BuyersPage() {
                   New Buyer
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Add a buyer and define how Lead OS should interpret their responses.
+                  Add a buyer and define how Lead OS should interpret responses and cap daily volume.
                 </p>
               </div>
 
@@ -549,6 +561,20 @@ export default function BuyersPage() {
                   value={newBuyer.minBid}
                   onChange={(e) => updateNewBuyer("minBid", e.target.value)}
                   className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Daily Cap
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  value={newBuyer.dailyCap}
+                  onChange={(e) => updateNewBuyer("dailyCap", e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                  placeholder="No cap"
                 />
               </div>
 
@@ -736,7 +762,7 @@ export default function BuyersPage() {
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="min-w-[1300px] w-full text-sm">
+          <table className="min-w-[1350px] w-full text-sm">
             <thead className="bg-gray-50 text-left text-gray-500">
               <tr>
                 <th className="px-4 py-3 font-medium"></th>
@@ -746,6 +772,7 @@ export default function BuyersPage() {
                 <th className="px-4 py-3 font-medium">Contact</th>
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">PPL</th>
+                <th className="px-4 py-3 font-medium">Daily Cap</th>
                 <th className="px-4 py-3 font-medium">Min Bid</th>
                 <th className="px-4 py-3 font-medium">Timeout</th>
                 <th className="px-4 py-3 font-medium">Status</th>
@@ -755,7 +782,7 @@ export default function BuyersPage() {
             <tbody>
               {filteredBuyers.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={11} className="px-4 py-12 text-center text-sm text-gray-500">
                     No buyers found.
                   </td>
                 </tr>
@@ -799,6 +826,10 @@ export default function BuyersPage() {
                         </td>
 
                         <td className="px-4 py-4">
+                          {buyer.dailyCap ?? "—"}
+                        </td>
+
+                        <td className="px-4 py-4">
                           {buyer.minBid ? `$${Number(buyer.minBid).toFixed(2)}` : "—"}
                         </td>
 
@@ -817,7 +848,7 @@ export default function BuyersPage() {
 
                       {isExpanded && (
                         <tr className="border-t border-gray-100 bg-gray-50">
-                          <td colSpan={10} className="px-6 py-6">
+                          <td colSpan={11} className="px-6 py-6">
                             <div className="grid gap-6 xl:grid-cols-3">
                               <div className="space-y-3 xl:col-span-2">
                                 <h3 className="text-sm font-semibold text-gray-800">
@@ -846,11 +877,7 @@ export default function BuyersPage() {
                                       <input
                                         value={draft?.companyName || ""}
                                         onChange={(e) =>
-                                          updateDraft(
-                                            buyer.id,
-                                            "companyName",
-                                            e.target.value
-                                          )
+                                          updateDraft(buyer.id, "companyName", e.target.value)
                                         }
                                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
                                       />
@@ -863,11 +890,7 @@ export default function BuyersPage() {
                                       <input
                                         value={draft?.contactName || ""}
                                         onChange={(e) =>
-                                          updateDraft(
-                                            buyer.id,
-                                            "contactName",
-                                            e.target.value
-                                          )
+                                          updateDraft(buyer.id, "contactName", e.target.value)
                                         }
                                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
                                       />
@@ -911,13 +934,25 @@ export default function BuyersPage() {
                                         step="0.01"
                                         value={draft?.pricePerLead || ""}
                                         onChange={(e) =>
-                                          updateDraft(
-                                            buyer.id,
-                                            "pricePerLead",
-                                            e.target.value
-                                          )
+                                          updateDraft(buyer.id, "pricePerLead", e.target.value)
                                         }
                                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                                        Daily Cap
+                                      </label>
+                                      <input
+                                        type="number"
+                                        step="1"
+                                        value={draft?.dailyCap || ""}
+                                        onChange={(e) =>
+                                          updateDraft(buyer.id, "dailyCap", e.target.value)
+                                        }
+                                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                        placeholder="No cap"
                                       />
                                     </div>
 
@@ -959,11 +994,7 @@ export default function BuyersPage() {
                                         value={draft?.acceptedStates || ""}
                                         placeholder="NY, FL, CA"
                                         onChange={(e) =>
-                                          updateDraft(
-                                            buyer.id,
-                                            "acceptedStates",
-                                            e.target.value
-                                          )
+                                          updateDraft(buyer.id, "acceptedStates", e.target.value)
                                         }
                                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
                                       />
@@ -977,11 +1008,7 @@ export default function BuyersPage() {
                                         value={draft?.requiredFields || ""}
                                         placeholder="firstName,lastName,phone,state,zip"
                                         onChange={(e) =>
-                                          updateDraft(
-                                            buyer.id,
-                                            "requiredFields",
-                                            e.target.value
-                                          )
+                                          updateDraft(buyer.id, "requiredFields", e.target.value)
                                         }
                                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
                                         rows={2}
@@ -1034,11 +1061,7 @@ export default function BuyersPage() {
                                       <select
                                         value={draft?.acceptanceMode || "standard"}
                                         onChange={(e) =>
-                                          updateDraft(
-                                            buyer.id,
-                                            "acceptanceMode",
-                                            e.target.value
-                                          )
+                                          updateDraft(buyer.id, "acceptanceMode", e.target.value)
                                         }
                                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
                                       >
@@ -1055,11 +1078,7 @@ export default function BuyersPage() {
                                         value={draft?.acceptancePath || ""}
                                         placeholder="status or result.success"
                                         onChange={(e) =>
-                                          updateDraft(
-                                            buyer.id,
-                                            "acceptancePath",
-                                            e.target.value
-                                          )
+                                          updateDraft(buyer.id, "acceptancePath", e.target.value)
                                         }
                                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
                                       />
@@ -1073,11 +1092,7 @@ export default function BuyersPage() {
                                         value={draft?.acceptanceValue || ""}
                                         placeholder="accepted / true / 1"
                                         onChange={(e) =>
-                                          updateDraft(
-                                            buyer.id,
-                                            "acceptanceValue",
-                                            e.target.value
-                                          )
+                                          updateDraft(buyer.id, "acceptanceValue", e.target.value)
                                         }
                                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
                                       />
@@ -1091,11 +1106,7 @@ export default function BuyersPage() {
                                         value={draft?.payoutPath || ""}
                                         placeholder="payout or data.amount"
                                         onChange={(e) =>
-                                          updateDraft(
-                                            buyer.id,
-                                            "payoutPath",
-                                            e.target.value
-                                          )
+                                          updateDraft(buyer.id, "payoutPath", e.target.value)
                                         }
                                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
                                       />
@@ -1336,46 +1347,6 @@ export default function BuyersPage() {
 
                                   <div>
                                     <div className="font-medium text-gray-800">
-                                      Example Ping Payload
-                                    </div>
-                                    <pre className="mt-2 whitespace-pre-wrap rounded-xl bg-gray-50 p-3 text-xs text-gray-700">
-{`{
-  "zip": "11746",
-  "state": "NY",
-  "source": "facebook",
-  "subId": "sub_123",
-  "publisherId": "pub_123"
-}`}
-                                    </pre>
-                                  </div>
-
-                                  <div>
-                                    <div className="font-medium text-gray-800">
-                                      Example Post Payload
-                                    </div>
-                                    <pre className="mt-2 whitespace-pre-wrap rounded-xl bg-gray-50 p-3 text-xs text-gray-700">
-{`{
-  "leadId": "lead_123",
-  "firstName": "John",
-  "lastName": "Doe",
-  "email": "john@example.com",
-  "phone": "5551234567",
-  "state": "NY",
-  "zip": "11746",
-  "source": "facebook",
-  "subId": "sub_123",
-  "publisherId": "pub_123",
-  "campaignId": "camp_123",
-  "campaignName": "Auto Accident Campaign",
-  "buyerId": "buyer_123",
-  "buyerName": "Buyer One",
-  "routingStatus": "assigned"
-}`}
-                                    </pre>
-                                  </div>
-
-                                  <div>
-                                    <div className="font-medium text-gray-800">
                                       Current Parsing Config
                                     </div>
                                     <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700 space-y-1">
@@ -1383,6 +1354,7 @@ export default function BuyersPage() {
                                       <div>Acceptance Path: {buyer.acceptancePath || "—"}</div>
                                       <div>Acceptance Value: {buyer.acceptanceValue || "—"}</div>
                                       <div>Payout Path: {buyer.payoutPath || "—"}</div>
+                                      <div>Daily Cap: {buyer.dailyCap ?? "—"}</div>
                                     </div>
                                   </div>
                                 </div>

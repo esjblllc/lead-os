@@ -23,6 +23,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       minBid,
       status,
       pricePerLead,
+      dailyCap,
       acceptedStates,
       requiredFields,
       notes,
@@ -65,6 +66,14 @@ export async function PATCH(req: Request, context: RouteContext) {
                 pricePerLead === null || pricePerLead === ""
                   ? null
                   : Number(pricePerLead),
+            }
+          : {}),
+        ...(typeof dailyCap !== "undefined"
+          ? {
+              dailyCap:
+                dailyCap === null || dailyCap === ""
+                  ? null
+                  : Number(dailyCap),
             }
           : {}),
         ...(typeof acceptedStates !== "undefined" ? { acceptedStates } : {}),
