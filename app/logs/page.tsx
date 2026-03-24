@@ -191,7 +191,7 @@ export default async function LogsPage({
     }),
   ]);
 
-  const pingEvents: LogEvent[] = pings.map((ping) => ({
+  const pingEvents: LogEvent[] = pings.map((ping: any) => ({
     id: ping.id,
     timestamp: ping.createdAt,
     type: "ping",
@@ -209,7 +209,7 @@ export default async function LogsPage({
       ping.error || ping.response || (ping.won ? "Winning ping" : "No details"),
   }));
 
-  const deliveryEvents: LogEvent[] = deliveries.map((delivery) => ({
+  const deliveryEvents: LogEvent[] = deliveries.map((delivery: any) => ({
     id: delivery.id,
     timestamp: delivery.createdAt,
     type: "delivery",
