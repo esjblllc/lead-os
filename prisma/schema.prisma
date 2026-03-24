@@ -30,8 +30,9 @@ model Buyer {
   postUrl         String?
   timeoutMs       Int?     @default(1500)
   minBid          Decimal? @db.Decimal(10, 2)
-  status          String
   pricePerLead    Decimal? @db.Decimal(10, 2)
+  dailyCap        Int?
+  status          String
   acceptedStates  String?
   requiredFields  String?
   notes           String?
