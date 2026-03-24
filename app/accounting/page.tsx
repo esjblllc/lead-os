@@ -276,7 +276,7 @@ export default async function AccountingPage({
   });
 
   const buyerRows = buildGroupedRows(
-    normalized.map((row) => ({
+    normalized.map((row: any) => ({
       key: row.buyer,
       revenue: row.revenue,
       cost: 0,
@@ -285,7 +285,7 @@ export default async function AccountingPage({
   );
 
   const supplierRows = buildGroupedRows(
-    normalized.map((row) => ({
+    normalized.map((row: any) => ({
       key: row.supplier,
       revenue: 0,
       cost: row.cost,
@@ -294,7 +294,7 @@ export default async function AccountingPage({
   );
 
   const campaignRows = buildGroupedRows(
-    normalized.map((row) => ({
+    normalized.map((row: any) => ({
       key: row.campaign,
       revenue: row.revenue,
       cost: row.cost,
