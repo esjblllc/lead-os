@@ -111,7 +111,7 @@ export default async function BuyerSpecsPage({
               defaultValue={selectedBuyer?.id || ""}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             >
-              {buyers.map((buyer) => (
+              {buyers.map((buyer: any) => (
                 <option key={buyer.id} value={buyer.id}>
                   {buyer.name}
                 </option>
