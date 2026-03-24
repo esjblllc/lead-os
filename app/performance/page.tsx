@@ -256,7 +256,7 @@ export default async function PerformancePage({
     },
   });
 
-  const normalized = leads.map((lead) => {
+  const normalized = leads.map((lead: any) => {
     const revenue = toNumber(lead.assignedBuyer?.pricePerLead);
     const cost = toNumber(lead.cost);
     const profit = toNumber(lead.profit);
@@ -274,7 +274,7 @@ export default async function PerformancePage({
   });
 
   const campaignRows = buildGroupedRows(
-    normalized.map((row) => ({
+    normalized.map((row: any) => ({
       key: row.campaign,
       revenue: row.revenue,
       cost: row.cost,
@@ -283,7 +283,7 @@ export default async function PerformancePage({
   );
 
   const buyerRows = buildGroupedRows(
-    normalized.map((row) => ({
+    normalized.map((row: any) => ({
       key: row.buyer,
       revenue: row.revenue,
       cost: row.cost,
@@ -292,7 +292,7 @@ export default async function PerformancePage({
   );
 
   const supplierRows = buildGroupedRows(
-    normalized.map((row) => ({
+    normalized.map((row: any) => ({
       key: row.supplier,
       revenue: row.revenue,
       cost: row.cost,
@@ -301,7 +301,7 @@ export default async function PerformancePage({
   );
 
   const sourceRows = buildGroupedRows(
-    normalized.map((row) => ({
+    normalized.map((row: any) => ({
       key: row.source,
       revenue: row.revenue,
       cost: row.cost,
@@ -310,7 +310,7 @@ export default async function PerformancePage({
   );
 
   const subIdRows = buildGroupedRows(
-    normalized.map((row) => ({
+    normalized.map((row: any) => ({
       key: row.subId,
       revenue: row.revenue,
       cost: row.cost,
@@ -319,9 +319,9 @@ export default async function PerformancePage({
   );
 
   const totalLeads = leads.length;
-  const totalRevenue = normalized.reduce((sum, row) => sum + row.revenue, 0);
-  const totalCost = normalized.reduce((sum, row) => sum + row.cost, 0);
-  const totalProfit = normalized.reduce((sum, row) => sum + row.profit, 0);
+  const totalRevenue = normalized.reduce((sum: number, row: any) => sum + row.revenue, 0);
+  const totalCost = normalized.reduce((sum: number, row: any) => sum + row.cost, 0);
+  const totalProfit = normalized.reduce((sum: number, row: any) => sum + row.profit, 0);
   const totalMargin =
     totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : null;
 
