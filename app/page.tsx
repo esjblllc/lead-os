@@ -141,15 +141,15 @@ export default async function DashboardPage({
   ]);
 
   const totalLeads = leads.length;
-  const assignedLeads = leads.filter((lead) => lead.routingStatus === "assigned").length;
-  const pendingLeads = leads.filter((lead) => lead.routingStatus === "pending").length;
+  const assignedLeads = leads.filter((lead: any) => lead.routingStatus === "assigned").length;
+  const pendingLeads = leads.filter((lead: any) => lead.routingStatus === "pending").length;
 
   const totalRevenue = leads.reduce(
-    (sum, lead) => sum + toNumber(lead.assignedBuyer?.pricePerLead),
+    (sum: number, lead: any) => sum + toNumber(lead.assignedBuyer?.pricePerLead),
     0
   );
-  const totalCost = leads.reduce((sum, lead) => sum + toNumber(lead.cost), 0);
-  const totalProfit = leads.reduce((sum, lead) => sum + toNumber(lead.profit), 0);
+  const totalCost = leads.reduce((sum: number, lead: any) => sum + toNumber(lead.cost), 0);
+  const totalProfit = leads.reduce((sum: number, lead: any) => sum + toNumber(lead.profit), 0);
   const totalMargin =
     totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : null;
 
