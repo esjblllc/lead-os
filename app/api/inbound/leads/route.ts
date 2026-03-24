@@ -19,6 +19,11 @@ type BuyerForRouting = {
   requiredFields?: string | null;
 };
 
+type EligibleBuyerLink = {
+  priority: number;
+  buyer: BuyerForRouting;
+};
+
 function toNumber(value: unknown) {
   if (value === null || typeof value === "undefined" || value === "") {
     return 0;
@@ -172,15 +177,18 @@ function parseCsvList(value: string | null | undefined) {
     .filter(Boolean);
 }
 
-function buyerAllowsLeadState(buyer: BuyerForRouting, state: string | null | undefined) {
-  const allowedStates = parseCsvList((buyer as any).acceptedStates);
+function buyerAllowsLeadState(
+  buyer: BuyerForRouting,
+  state: string | null | undefined
+) {
+  const allowedStates = parseCsvList(buyer.acceptedStates);
   if (allowedStates.length === 0) return true;
   if (!state) return false;
   return allowedStates.includes(String(state).toUpperCase());
 }
 
 function buyerHasRequiredFields(buyer: BuyerForRouting, body: any) {
-  const requiredFields = parseCsvList((buyer as any).requiredFields);
+  const requiredFields = parseCsvList(buyer.requiredFields);
   if (requiredFields.length === 0) return true;
 
   return requiredFields.every((field) => {
@@ -208,7 +216,6 @@ async function getBuyerPerformanceScores(
     include: {
       lead: {
         select: {
-          assignedBuyerId: true,
           cost: true,
           profit: true,
         },
@@ -324,9 +331,10 @@ async function handlePing(
     const accepted = parsed.accepted || getLegacyAccepted(json);
     const bid = parsed.payout ?? getLegacyBid(json);
 
-    const minBid = buyer.minBid !== null && typeof buyer.minBid !== "undefined"
-      ? Number(buyer.minBid)
-      : null;
+    const minBid =
+      buyer.minBid !== null && typeof buyer.minBid !== "undefined"
+        ? Number(buyer.minBid)
+        : null;
 
     const meetsMinBid =
       minBid === null || bid === null ? true : Number(bid) >= minBid;
@@ -371,7 +379,9 @@ async function handlePing(
   } catch (error: any) {
     const timeoutLike =
       error?.name === "AbortError" ||
-      String(error?.message || "").toLowerCase().includes("aborted");
+      String(error?.message || "")
+        .toLowerCase()
+        .includes("aborted");
 
     return {
       accepted: false,
@@ -459,7 +469,9 @@ async function handlePost(
   } catch (error: any) {
     const timeoutLike =
       error?.name === "AbortError" ||
-      String(error?.message || "").toLowerCase().includes("aborted");
+      String(error?.message || "")
+        .toLowerCase()
+        .includes("aborted");
 
     return {
       accepted: false,
@@ -477,13 +489,19 @@ export async function POST(req: NextRequest) {
   try {
     const apiKey = req.headers.get("x-api-key");
     if (!apiKey) {
-      return Response.json({ error: "Missing x-api-key header" }, { status: 401 });
+      return Response.json(
+        { error: "Missing x-api-key header" },
+        { status: 401 }
+      );
     }
 
     const body = await req.json();
 
     if (!body.campaignSlug) {
-      return Response.json({ error: "campaignSlug is required" }, { status: 400 });
+      return Response.json(
+        { error: "campaignSlug is required" },
+        { status: 400 }
+      );
     }
 
     const supplier = await db.supplier.findFirst({
@@ -533,8 +551,8 @@ export async function POST(req: NextRequest) {
           typeof body.cost !== "undefined" && body.cost !== null
             ? Number(body.cost)
             : supplier.defaultCost
-            ? Number(supplier.defaultCost)
-            : null,
+              ? Number(supplier.defaultCost)
+              : null,
         routingStatus: "pending",
       },
     });
@@ -580,29 +598,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    cost eligibleBuyerLinks = linkedBuyers.filter((link) => {
-        cost buyer = link.buyer;
+    const eligibleBuyerLinks: EligibleBuyerLink[] = linkedBuyers.filter((link) => {
+      const buyer = link.buyer;
 
-        return (
-            buyerAllowsLeadState(buyer, body.state) &&
-            buyerHasRequiredFields(buyer, body)
-        );
+      return (
+        buyerAllowsLeadState(buyer, body.state) &&
+        buyerHasRequiredFields(buyer, body)
+      );
     });
 
     if (eligibleBuyerLinks.length === 0) {
-        return Response.json({
-            success: true
-            leadID: lead.id,
-            routingStatus: "pending",
-            message: "No eligible buyers matched lead requirements",
-        });
+      return Response.json({
+        success: true,
+        leadId: lead.id,
+        routingStatus: "pending",
+        message: "No eligible buyers matched lead requirements",
+      });
     }
 
     const leadCost = toNumber(lead.cost);
 
-    // ---------------------------
-    // PING / POST MODE
-    // ---------------------------
     if (campaign.routingMode === "ping_post") {
       const acceptedPings: {
         buyer: BuyerForRouting;
@@ -663,18 +678,18 @@ export async function POST(req: NextRequest) {
       const buyerPerformanceScores = await getBuyerPerformanceScores(
         acceptedPings.map((item) => item.buyer.id),
         acceptedPings.map((item) => item.buyer)
-        );
+      );
 
-    const orderedCandidates = [...acceptedPings].sort((a, b) => {
-     if (b.bid !== a.bid) return b.bid - a.bid;
+      const orderedCandidates = [...acceptedPings].sort((a, b) => {
+        if (b.bid !== a.bid) return b.bid - a.bid;
 
-    const scoreA = buyerPerformanceScores.get(a.buyer.id) ?? 0;
-    const scoreB = buyerPerformanceScores.get(b.buyer.id) ?? 0;
+        const scoreA = buyerPerformanceScores.get(a.buyer.id) ?? 0;
+        const scoreB = buyerPerformanceScores.get(b.buyer.id) ?? 0;
 
-    if (scoreB !== scoreA) return scoreB - scoreA;
+        if (scoreB !== scoreA) return scoreB - scoreA;
 
-    return a.priority - b.priority;
-});
+        return a.priority - b.priority;
+      });
 
       for (const candidate of orderedCandidates) {
         await db.pingResult.updateMany({
@@ -754,26 +769,22 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ---------------------------
-    // DIRECT POST / ROUND ROBIN
-    // ---------------------------
     const directBuyers = eligibleBuyerLinks.map((link) => link.buyer);
     const directBuyerScores = await getBuyerPerformanceScores(
-        directBuyers.map((buyer) => buyer.id),
-        directBuyers
-);
+      directBuyers.map((buyer) => buyer.id),
+      directBuyers
+    );
 
     const rankedDirectLinks = [...eligibleBuyerLinks].sort((a, b) => {
-        const scoreA = directBuyerScores.get(a.buyer.id) ?? 0;
-        const scoreB = directBuyerScores.get(b.buyer.id) ?? 0;
+      const scoreA = directBuyerScores.get(a.buyer.id) ?? 0;
+      const scoreB = directBuyerScores.get(b.buyer.id) ?? 0;
 
-        if (scoreB !== scoreA) return scoreB - scoreA;
+      if (scoreB !== scoreA) return scoreB - scoreA;
 
-        return a.priority - b.priority;
-        });
+      return a.priority - b.priority;
+    });
 
-        for (const link of rankedDirectLinks) {
-            
+    for (const link of rankedDirectLinks) {
       const buyer = link.buyer;
 
       const postResult = await handlePost(req, buyer, lead.id, body, campaign);
@@ -816,10 +827,6 @@ export async function POST(req: NextRequest) {
           buyerName: buyer.name,
           payout: revenue,
         });
-      }
-
-      if (campaign.routingMode === "direct_post" && !campaign.allowFallback) {
-        break;
       }
     }
 
