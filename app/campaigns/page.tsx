@@ -2,35 +2,24 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 
-type Buyer = {
-  id: string;
-  name: string;
-  status: string;
-};
-
-type CampaignBuyerLink = {
-  id: string;
-  priority: number;
-  buyer: Buyer;
-};
-
 type Campaign = {
   id: string;
+  organizationId: string;
   name: string;
   slug: string;
   vertical: string;
   routingMode: string;
   status: string;
-  createdAt: string;
-  buyerLinks: CampaignBuyerLink[];
-  leads: {
-    id: string;
-  }[];
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type CampaignDraft = {
-  status: string;
+  name: string;
+  slug: string;
+  vertical: string;
   routingMode: string;
+  status: string;
 };
 
 type NewCampaignForm = {
@@ -40,6 +29,10 @@ type NewCampaignForm = {
   routingMode: string;
   status: string;
 };
+
+function normalize(value: unknown) {
+  return value === null || typeof value === "undefined" ? "" : String(value);
+}
 
 function truncateId(value: string) {
   return value.length > 8 ? value.slice(0, 8) : value;
@@ -51,74 +44,68 @@ function statusBadgeClass(status: string) {
     : "bg-yellow-100 text-yellow-700";
 }
 
+function routingModeLabel(mode: string) {
+  if (mode === "ping_post") return "Ping/Post";
+  return "Direct Post";
+}
+
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(
-    null
-  );
-  const [drafts, setDrafts] = useState<Record<string, CampaignDraft>>({});
-  const [newBuyerSelections, setNewBuyerSelections] = useState<
-    Record<string, string>
-  >({});
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
+  const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, CampaignDraft>>({});
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [routingFilter, setRoutingFilter] = useState("all");
+  const [routingModeFilter, setRoutingModeFilter] = useState("all");
 
   const [newCampaign, setNewCampaign] = useState<NewCampaignForm>({
     name: "",
     slug: "",
     vertical: "",
-    routingMode: "round_robin",
+    routingMode: "direct_post",
     status: "active",
   });
 
+  function slugify(value: string) {
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
   async function fetchCampaigns() {
-    try {
-      const res = await fetch("/api/campaigns");
+    const res = await fetch("/api/campaigns");
+    const data = await res.json();
+    const campaignData = data.data || [];
 
-      if (!res.ok) {
-        throw new Error("Failed to fetch campaigns");
-      }
+    setCampaigns(campaignData);
 
-      const json = await res.json();
-      const campaignData = json.data || [];
-      const buyerData = json.meta?.buyers || [];
+    const nextDrafts: Record<string, CampaignDraft> = {};
+    campaignData.forEach((campaign: Campaign) => {
+      nextDrafts[campaign.id] = {
+        name: campaign.name || "",
+        slug: campaign.slug || "",
+        vertical: campaign.vertical || "",
+        routingMode: campaign.routingMode || "direct_post",
+        status: campaign.status || "active",
+      };
+    });
 
-      setCampaigns(campaignData);
-      setBuyers(buyerData);
-
-      const nextDrafts: Record<string, CampaignDraft> = {};
-      campaignData.forEach((campaign: Campaign) => {
-        nextDrafts[campaign.id] = {
-          status: campaign.status,
-          routingMode: campaign.routingMode,
-        };
-      });
-
-      setDrafts(nextDrafts);
-    } catch (err) {
-      console.error("Campaign fetch error:", err);
-    } finally {
-      setLoading(false);
-    }
+    setDrafts(nextDrafts);
+    setLoading(false);
   }
 
   useEffect(() => {
     fetchCampaigns();
   }, []);
 
-  function updateDraft(
-    id: string,
-    field: keyof CampaignDraft,
-    value: string
-  ) {
+  function updateDraft(id: string, field: keyof CampaignDraft, value: string) {
     setDrafts((prev) => ({
       ...prev,
       [id]: {
@@ -129,10 +116,18 @@ export default function CampaignsPage() {
   }
 
   function updateNewCampaign(field: keyof NewCampaignForm, value: string) {
-    setNewCampaign((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setNewCampaign((prev) => {
+      const next = {
+        ...prev,
+        [field]: value,
+      };
+
+      if (field === "name" && (!prev.slug || prev.slug === slugify(prev.name))) {
+        next.slug = slugify(value);
+      }
+
+      return next;
+    });
   }
 
   async function createCampaign(e: React.FormEvent) {
@@ -184,7 +179,7 @@ export default function CampaignsPage() {
         name: "",
         slug: "",
         vertical: "",
-        routingMode: "round_robin",
+        routingMode: "direct_post",
         status: "active",
       });
 
@@ -200,6 +195,10 @@ export default function CampaignsPage() {
     const draft = drafts[id];
     if (!draft) return;
 
+    if (!draft.name.trim() || !draft.slug.trim() || !draft.vertical.trim()) {
+      return;
+    }
+
     try {
       setSavingId(id);
 
@@ -209,8 +208,11 @@ export default function CampaignsPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          status: draft.status,
+          name: draft.name,
+          slug: draft.slug,
+          vertical: draft.vertical,
           routingMode: draft.routingMode,
+          status: draft.status,
         }),
       });
 
@@ -231,79 +233,12 @@ export default function CampaignsPage() {
     if (!draft) return false;
 
     return (
-      draft.status !== campaign.status ||
-      draft.routingMode !== campaign.routingMode
+      draft.name !== normalize(campaign.name) ||
+      draft.slug !== normalize(campaign.slug) ||
+      draft.vertical !== normalize(campaign.vertical) ||
+      draft.routingMode !== normalize(campaign.routingMode || "direct_post") ||
+      draft.status !== normalize(campaign.status)
     );
-  }
-
-  async function addBuyerToCampaign(campaignId: string) {
-    const buyerId = newBuyerSelections[campaignId];
-    if (!buyerId) return;
-
-    try {
-      const res = await fetch("/api/campaign-buyers", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          campaignId,
-          buyerId,
-          priority: 1,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to add buyer to campaign");
-      }
-
-      setNewBuyerSelections((prev) => ({
-        ...prev,
-        [campaignId]: "",
-      }));
-
-      await fetchCampaigns();
-    } catch (err) {
-      console.error("Add buyer error:", err);
-    }
-  }
-
-  async function updateLinkPriority(linkId: string, priority: number) {
-    try {
-      const res = await fetch(`/api/campaign-buyers/${linkId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          priority,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to update priority");
-      }
-
-      await fetchCampaigns();
-    } catch (err) {
-      console.error("Update priority error:", err);
-    }
-  }
-
-  async function removeBuyerLink(linkId: string) {
-    try {
-      const res = await fetch(`/api/campaign-buyers/${linkId}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to remove buyer link");
-      }
-
-      await fetchCampaigns();
-    } catch (err) {
-      console.error("Remove buyer link error:", err);
-    }
   }
 
   const filteredCampaigns = useMemo(() => {
@@ -313,19 +248,19 @@ export default function CampaignsPage() {
       const matchesSearch =
         searchLower === "" ||
         campaign.id.toLowerCase().includes(searchLower) ||
-        campaign.name.toLowerCase().includes(searchLower) ||
-        campaign.slug.toLowerCase().includes(searchLower) ||
-        campaign.vertical.toLowerCase().includes(searchLower);
+        (campaign.name || "").toLowerCase().includes(searchLower) ||
+        (campaign.slug || "").toLowerCase().includes(searchLower) ||
+        (campaign.vertical || "").toLowerCase().includes(searchLower);
 
       const matchesStatus =
         statusFilter === "all" || campaign.status === statusFilter;
 
-      const matchesRouting =
-        routingFilter === "all" || campaign.routingMode === routingFilter;
+      const matchesRoutingMode =
+        routingModeFilter === "all" || campaign.routingMode === routingModeFilter;
 
-      return matchesSearch && matchesStatus && matchesRouting;
+      return matchesSearch && matchesStatus && matchesRoutingMode;
     });
-  }, [campaigns, search, statusFilter, routingFilter]);
+  }, [campaigns, search, statusFilter, routingModeFilter]);
 
   if (loading) {
     return <div className="p-6 text-sm text-gray-500">Loading campaigns...</div>;
@@ -342,8 +277,7 @@ export default function CampaignsPage() {
             Campaign Management
           </h1>
           <p className="mt-2 text-sm text-gray-500">
-            Manage campaign settings, linked buyers, priorities, routing modes,
-            and lead volume.
+            Manage campaign slugs, verticals, routing mode, and live status.
           </p>
         </div>
 
@@ -358,7 +292,7 @@ export default function CampaignsPage() {
                   New Campaign
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Create a new campaign and define its routing behavior.
+                  Create a campaign and choose whether it runs Direct Post or Ping/Post.
                 </p>
               </div>
 
@@ -371,8 +305,8 @@ export default function CampaignsPage() {
               </button>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <div>
+            <div className="grid gap-4 md:grid-cols-5">
+              <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-medium text-gray-700">
                   Campaign Name
                 </label>
@@ -390,9 +324,11 @@ export default function CampaignsPage() {
                 </label>
                 <input
                   value={newCampaign.slug}
-                  onChange={(e) => updateNewCampaign("slug", e.target.value)}
+                  onChange={(e) =>
+                    updateNewCampaign("slug", slugify(e.target.value))
+                  }
                   className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  placeholder="Required"
+                  placeholder="test-campaign"
                 />
               </div>
 
@@ -402,11 +338,9 @@ export default function CampaignsPage() {
                 </label>
                 <input
                   value={newCampaign.vertical}
-                  onChange={(e) =>
-                    updateNewCampaign("vertical", e.target.value)
-                  }
+                  onChange={(e) => updateNewCampaign("vertical", e.target.value)}
                   className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  placeholder="Required"
+                  placeholder="Auto Accident"
                 />
               </div>
 
@@ -421,9 +355,8 @@ export default function CampaignsPage() {
                   }
                   className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
                 >
-                  <option value="round_robin">round_robin</option>
-                  <option value="ping_post">ping_post</option>
-                  <option value="direct_post">direct_post</option>
+                  <option value="direct_post">Direct Post</option>
+                  <option value="ping_post">Ping/Post</option>
                 </select>
               </div>
 
@@ -455,8 +388,8 @@ export default function CampaignsPage() {
             ) : null}
           </form>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-5">
-            <div className="xl:col-span-2">
+          <div className="mt-6 grid gap-4 md:grid-cols-4 xl:grid-cols-6">
+            <div className="md:col-span-2 xl:col-span-3">
               <label className="mb-2 block text-sm font-medium text-gray-700">
                 Search
               </label>
@@ -467,6 +400,21 @@ export default function CampaignsPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
               />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Routing Mode
+              </label>
+              <select
+                value={routingModeFilter}
+                onChange={(e) => setRoutingModeFilter(e.target.value)}
+                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="all">All modes</option>
+                <option value="direct_post">Direct Post</option>
+                <option value="ping_post">Ping/Post</option>
+              </select>
             </div>
 
             <div>
@@ -484,22 +432,6 @@ export default function CampaignsPage() {
               </select>
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Routing Mode
-              </label>
-              <select
-                value={routingFilter}
-                onChange={(e) => setRoutingFilter(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-              >
-                <option value="all">All routing modes</option>
-                <option value="round_robin">round_robin</option>
-                <option value="ping_post">ping_post</option>
-                <option value="direct_post">direct_post</option>
-              </select>
-            </div>
-
             <div className="flex items-end text-sm text-gray-500">
               Showing {filteredCampaigns.length} of {campaigns.length} campaigns
             </div>
@@ -514,24 +446,18 @@ export default function CampaignsPage() {
               <tr>
                 <th className="px-4 py-3 font-medium"></th>
                 <th className="px-4 py-3 font-medium">Campaign ID</th>
-                <th className="px-4 py-3 font-medium">Created</th>
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Slug</th>
                 <th className="px-4 py-3 font-medium">Vertical</th>
-                <th className="px-4 py-3 font-medium">Routing</th>
+                <th className="px-4 py-3 font-medium">Routing Mode</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Buyers</th>
-                <th className="px-4 py-3 font-medium">Leads</th>
               </tr>
             </thead>
 
             <tbody>
               {filteredCampaigns.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={10}
-                    className="px-4 py-12 text-center text-sm text-gray-500"
-                  >
+                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-500">
                     No campaigns found.
                   </td>
                 </tr>
@@ -539,12 +465,6 @@ export default function CampaignsPage() {
                 filteredCampaigns.map((campaign) => {
                   const isExpanded = expandedCampaignId === campaign.id;
                   const draft = drafts[campaign.id];
-                  const linkedBuyerIds = new Set(
-                    campaign.buyerLinks.map((link) => link.buyer.id)
-                  );
-                  const availableBuyers = buyers.filter(
-                    (buyer) => !linkedBuyerIds.has(buyer.id)
-                  );
 
                   return (
                     <Fragment key={campaign.id}>
@@ -552,9 +472,7 @@ export default function CampaignsPage() {
                         <td className="px-4 py-4">
                           <button
                             onClick={() =>
-                              setExpandedCampaignId(
-                                isExpanded ? null : campaign.id
-                              )
+                              setExpandedCampaignId(isExpanded ? null : campaign.id)
                             }
                             className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-100"
                           >
@@ -566,20 +484,15 @@ export default function CampaignsPage() {
                           {truncateId(campaign.id)}
                         </td>
 
-                        <td className="px-4 py-4 text-gray-500">
-                          {new Date(campaign.createdAt).toLocaleString()}
-                        </td>
-
                         <td className="px-4 py-4 font-medium text-gray-900">
                           {campaign.name}
                         </td>
 
                         <td className="px-4 py-4">{campaign.slug}</td>
-
                         <td className="px-4 py-4">{campaign.vertical}</td>
-
-                        <td className="px-4 py-4">{campaign.routingMode}</td>
-
+                        <td className="px-4 py-4">
+                          {routingModeLabel(campaign.routingMode)}
+                        </td>
                         <td className="px-4 py-4">
                           <span
                             className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusBadgeClass(
@@ -589,42 +502,64 @@ export default function CampaignsPage() {
                             {campaign.status}
                           </span>
                         </td>
-
-                        <td className="px-4 py-4">{campaign.buyerLinks.length}</td>
-
-                        <td className="px-4 py-4">{campaign.leads.length}</td>
                       </tr>
 
                       {isExpanded && (
                         <tr className="border-t border-gray-100 bg-gray-50">
-                          <td colSpan={10} className="px-6 py-6">
+                          <td colSpan={7} className="px-6 py-6">
                             <div className="grid gap-6 xl:grid-cols-3">
-                              <div className="space-y-3">
+                              <div className="space-y-3 xl:col-span-2">
                                 <h3 className="text-sm font-semibold text-gray-800">
                                   Campaign Settings
                                 </h3>
 
                                 <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                                  <div className="grid gap-4">
+                                  <div className="grid gap-4 md:grid-cols-2">
                                     <div>
                                       <label className="mb-2 block text-sm font-medium text-gray-700">
-                                        Campaign Status
+                                        Campaign Name
                                       </label>
-                                      <select
-                                        value={draft?.status || campaign.status}
+                                      <input
+                                        value={draft?.name || ""}
+                                        onChange={(e) =>
+                                          updateDraft(campaign.id, "name", e.target.value)
+                                        }
+                                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                                        Slug
+                                      </label>
+                                      <input
+                                        value={draft?.slug || ""}
                                         onChange={(e) =>
                                           updateDraft(
                                             campaign.id,
-                                            "status",
+                                            "slug",
+                                            slugify(e.target.value)
+                                          )
+                                        }
+                                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                                        Vertical
+                                      </label>
+                                      <input
+                                        value={draft?.vertical || ""}
+                                        onChange={(e) =>
+                                          updateDraft(
+                                            campaign.id,
+                                            "vertical",
                                             e.target.value
                                           )
                                         }
                                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                                        disabled={savingId === campaign.id}
-                                      >
-                                        <option value="active">active</option>
-                                        <option value="paused">paused</option>
-                                      </select>
+                                      />
                                     </div>
 
                                     <div>
@@ -632,10 +567,7 @@ export default function CampaignsPage() {
                                         Routing Mode
                                       </label>
                                       <select
-                                        value={
-                                          draft?.routingMode ||
-                                          campaign.routingMode
-                                        }
+                                        value={draft?.routingMode || "direct_post"}
                                         onChange={(e) =>
                                           updateDraft(
                                             campaign.id,
@@ -644,154 +576,94 @@ export default function CampaignsPage() {
                                           )
                                         }
                                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                                        disabled={savingId === campaign.id}
                                       >
-                                        <option value="round_robin">
-                                          round_robin
-                                        </option>
-                                        <option value="ping_post">
-                                          ping_post
-                                        </option>
-                                        <option value="direct_post">
-                                          direct_post
-                                        </option>
+                                        <option value="direct_post">Direct Post</option>
+                                        <option value="ping_post">Ping/Post</option>
                                       </select>
                                     </div>
 
-                                    <div className="flex items-center gap-3">
-                                      <button
-                                        onClick={() => saveCampaign(campaign.id)}
-                                        disabled={
-                                          !isDirty(campaign) ||
-                                          savingId === campaign.id
+                                    <div>
+                                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                                        Status
+                                      </label>
+                                      <select
+                                        value={draft?.status || "active"}
+                                        onChange={(e) =>
+                                          updateDraft(
+                                            campaign.id,
+                                            "status",
+                                            e.target.value
+                                          )
                                         }
-                                        className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
                                       >
-                                        {savingId === campaign.id
-                                          ? "Saving..."
-                                          : "Save"}
-                                      </button>
-
-                                      {isDirty(campaign) &&
-                                        savingId !== campaign.id && (
-                                          <span className="text-sm text-amber-600">
-                                            Unsaved changes
-                                          </span>
-                                        )}
+                                        <option value="active">active</option>
+                                        <option value="paused">paused</option>
+                                      </select>
                                     </div>
+                                  </div>
+
+                                  <div className="mt-5 flex items-center gap-3">
+                                    <button
+                                      onClick={() => saveCampaign(campaign.id)}
+                                      disabled={!isDirty(campaign) || savingId === campaign.id}
+                                      className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      {savingId === campaign.id ? "Saving..." : "Save"}
+                                    </button>
+
+                                    {isDirty(campaign) && savingId !== campaign.id && (
+                                      <span className="text-sm text-amber-600">
+                                        Unsaved changes
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </div>
 
-                              <div className="space-y-3 xl:col-span-2">
+                              <div className="space-y-3">
                                 <h3 className="text-sm font-semibold text-gray-800">
-                                  Linked Buyers
+                                  Routing Notes
                                 </h3>
 
-                                <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                                  {campaign.buyerLinks.length === 0 ? (
-                                    <div className="text-sm text-gray-500">
-                                      No buyers linked yet.
+                                <div className="rounded-2xl border border-gray-200 bg-white p-5 text-sm shadow-sm space-y-4">
+                                  <div>
+                                    <div className="font-medium text-gray-800">Current Mode</div>
+                                    <div className="mt-2 rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
+                                      {routingModeLabel(draft?.routingMode || campaign.routingMode)}
                                     </div>
-                                  ) : (
-                                    <div className="overflow-x-auto">
-                                      <table className="min-w-full text-sm">
-                                        <thead>
-                                          <tr className="border-b border-gray-100 text-left text-gray-500">
-                                            <th className="pb-3 pr-4 font-medium">
-                                              Buyer
-                                            </th>
-                                            <th className="pb-3 pr-4 font-medium">
-                                              Status
-                                            </th>
-                                            <th className="pb-3 pr-4 font-medium">
-                                              Priority
-                                            </th>
-                                            <th className="pb-3 font-medium">
-                                              Actions
-                                            </th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {campaign.buyerLinks.map((link) => (
-                                            <tr
-                                              key={link.id}
-                                              className="border-b border-gray-100 last:border-0"
-                                            >
-                                              <td className="py-4 pr-4 font-medium text-gray-900">
-                                                {link.buyer.name}
-                                              </td>
+                                  </div>
 
-                                              <td className="py-4 pr-4">
-                                                <span
-                                                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusBadgeClass(
-                                                    link.buyer.status
-                                                  )}`}
-                                                >
-                                                  {link.buyer.status}
-                                                </span>
-                                              </td>
-
-                                              <td className="py-4 pr-4">
-                                                <input
-                                                  type="number"
-                                                  min={1}
-                                                  value={link.priority}
-                                                  onChange={(e) =>
-                                                    updateLinkPriority(
-                                                      link.id,
-                                                      Number(e.target.value)
-                                                    )
-                                                  }
-                                                  className="w-24 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                                                />
-                                              </td>
-
-                                              <td className="py-4">
-                                                <button
-                                                  onClick={() =>
-                                                    removeBuyerLink(link.id)
-                                                  }
-                                                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 hover:bg-red-100"
-                                                >
-                                                  Remove
-                                                </button>
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
+                                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+                                    <div className="font-semibold">Direct Post</div>
+                                    <div className="mt-1">
+                                      Posts the full lead directly to linked buyers in priority order.
                                     </div>
-                                  )}
+                                  </div>
 
-                                  <div className="mt-5 flex flex-col gap-3 md:flex-row">
-                                    <select
-                                      value={newBuyerSelections[campaign.id] || ""}
-                                      onChange={(e) =>
-                                        setNewBuyerSelections((prev) => ({
-                                          ...prev,
-                                          [campaign.id]: e.target.value,
-                                        }))
-                                      }
-                                      className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                                    >
-                                      <option value="">Select buyer to link</option>
-                                      {availableBuyers.map((buyer) => (
-                                        <option key={buyer.id} value={buyer.id}>
-                                          {buyer.name} ({buyer.status})
-                                        </option>
-                                      ))}
-                                    </select>
+                                  <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-800">
+                                    <div className="font-semibold">Ping/Post</div>
+                                    <div className="mt-1">
+                                      Pings linked buyers first, stores bids, selects the winning buyer,
+                                      then posts the full lead.
+                                    </div>
+                                  </div>
 
-                                    <button
-                                      onClick={() =>
-                                        addBuyerToCampaign(campaign.id)
-                                      }
-                                      disabled={!newBuyerSelections[campaign.id]}
-                                      className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                      Add Buyer
-                                    </button>
+                                  <div>
+                                    <div className="font-medium text-gray-800">Campaign Slug</div>
+                                    <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700 break-all">
+                                      {draft?.slug || campaign.slug}
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <div className="font-medium text-gray-800">Test Payload Field</div>
+                                    <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700">
+                                      Inbound posts should send:
+                                      <div className="mt-2 font-mono">
+                                        {`"campaignSlug": "${draft?.slug || campaign.slug}"`}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
