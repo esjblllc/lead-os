@@ -16,6 +16,20 @@ model Organization {
   campaigns Campaign[]
   leads     Lead[]
   suppliers Supplier[]
+  users     User[]
+}
+
+model User {
+  id             String   @id @default(uuid())
+  organizationId String
+  email          String   @unique
+  passwordHash   String
+  role           String   @default("admin")
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
 }
 
 model Buyer {
