@@ -13,8 +13,8 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  const existingOrg = await prisma.organization.findUnique({
-    where: { slug: "test-org" },
+  const existingOrg = await prisma.organization.findFirst({
+    where: { name: "Test Org" },
   });
 
   const org =
@@ -22,7 +22,6 @@ async function main() {
     (await prisma.organization.create({
       data: {
         name: "Test Org",
-        slug: "test-org",
       },
     }));
 
