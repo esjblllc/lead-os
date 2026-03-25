@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken, getSessionCookieName } from "@/lib/auth";
 
-export async function proxy(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (
-    pathname === "/login" ||
+  const isPublicPath =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/invite") || // ✅ CRITICAL
     pathname.startsWith("/api/auth/login") ||
-    pathname.startsWith("/api/auth/logout") ||
+    pathname.startsWith("/api/invites/accept") || // ✅ CRITICAL
     pathname.startsWith("/api/inbound/leads") ||
     pathname.startsWith("/api/mock-buyer") ||
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon.ico")
-  ) {
+    pathname.startsWith("/favicon.ico");
+
+  if (isPublicPath) {
     return NextResponse.next();
   }
 
