@@ -43,6 +43,11 @@ export default function NavLinks() {
         Campaigns
       </Link>
 
+      {/* ✅ NEW USERS PAGE */}
+      <Link href="/users" className={linkClass("/users")}>
+        Users
+      </Link>
+
       <Link href="/leads" className={linkClass("/leads")}>
         Leads
       </Link>
