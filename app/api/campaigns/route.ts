@@ -1,43 +1,24 @@
 import { db } from "@/lib/db";
-import { getOrCreateDefaultOrganization } from "@/lib/default-org";
+import { getRequestSessionUser, isPlatformAdmin } from "@/lib/request-session-user";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const [campaigns, buyers] = await Promise.all([
-      db.campaign.findMany({
-        orderBy: { createdAt: "desc" },
-        include: {
-          buyerLinks: {
-            include: {
-              buyer: true,
-            },
-            orderBy: {
-              priority: "asc",
-            },
-          },
-          leads: {
-            select: {
-              id: true,
-            },
-          },
-        },
-      }),
-      db.buyer.findMany({
-        where: {
-          status: "active",
-        },
-        orderBy: { name: "asc" },
-      }),
-    ]);
+    const sessionUser = await getRequestSessionUser(req);
 
-    return Response.json({
-      data: campaigns,
-      meta: {
-        buyers,
-      },
+    if (!sessionUser) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const campaigns = await db.campaign.findMany({
+      where: isPlatformAdmin(sessionUser)
+        ? undefined
+        : { organizationId: sessionUser.organizationId },
+      orderBy: { createdAt: "desc" },
     });
+
+    return Response.json({ data: campaigns });
   } catch (error) {
-    console.error("Campaign GET error:", error);
+    console.error("Campaigns GET error:", error);
 
     return Response.json(
       { error: "Failed to fetch campaigns" },
@@ -48,46 +29,39 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const sessionUser = await getRequestSessionUser(req);
+
+    if (!sessionUser) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
+    const { name, slug, vertical, routingMode, status } = body;
 
-    const {
-      organizationId,
-      name,
-      slug,
-      vertical,
-      routingMode,
-      status,
-    } = body;
-
-    if (!name || !slug || !vertical || !routingMode) {
+    if (!name || !slug || !vertical) {
       return Response.json(
-        { error: "name, slug, vertical, and routingMode are required" },
+        { error: "name, slug, and vertical are required" },
         { status: 400 }
       );
     }
 
-    const org =
-      organizationId
-        ? { id: organizationId }
-        : await getOrCreateDefaultOrganization();
-
     const campaign = await db.campaign.create({
       data: {
-        organizationId: org.id,
+        organizationId: sessionUser.organizationId,
         name,
         slug,
         vertical,
-        routingMode,
-        status: status ?? "active",
+        routingMode: routingMode || "direct_post",
+        status: status || "active",
       },
     });
 
     return Response.json({ data: campaign }, { status: 201 });
-  } catch (error: any) {
-    console.error("Campaign POST error:", error);
+  } catch (error) {
+    console.error("Campaigns POST error:", error);
 
     return Response.json(
-      { error: error?.message ?? "Failed to create campaign" },
+      { error: "Failed to create campaign" },
       { status: 500 }
     );
   }

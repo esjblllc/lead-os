@@ -1,47 +1,64 @@
 import { db } from "@/lib/db";
-import { generateApiKey } from "@/lib/api-key";
-import { getOrCreateDefaultOrganization } from "@/lib/default-org";
+import { getRequestSessionUser, isPlatformAdmin } from "@/lib/request-session-user";
 
-export async function GET() {
-  const suppliers = await db.supplier.findMany({
-    orderBy: { createdAt: "desc" },
-  });
+export async function GET(req: Request) {
+  try {
+    const sessionUser = await getRequestSessionUser(req);
 
-  return Response.json({ data: suppliers });
+    if (!sessionUser) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const suppliers = await db.supplier.findMany({
+      where: isPlatformAdmin(sessionUser)
+        ? undefined
+        : { organizationId: sessionUser.organizationId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return Response.json({ data: suppliers });
+  } catch (error) {
+    console.error("Suppliers GET error:", error);
+
+    return Response.json(
+      { error: "Failed to fetch suppliers" },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const sessionUser = await getRequestSessionUser(req);
 
+    if (!sessionUser) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
     const {
-      organizationId,
       name,
       companyName,
       contactName,
       email,
       trafficSource,
       defaultCost,
+      apiKey,
       status,
       acceptedVerticals,
       notes,
     } = body;
 
-    if (!name) {
+    if (!name || !apiKey) {
       return Response.json(
-        { error: "name is required" },
+        { error: "name and apiKey are required" },
         { status: 400 }
       );
     }
 
-    const org =
-      organizationId
-        ? { id: organizationId }
-        : await getOrCreateDefaultOrganization();
-
     const supplier = await db.supplier.create({
       data: {
-        organizationId: org.id,
+        organizationId: sessionUser.organizationId,
         name,
         companyName,
         contactName,
@@ -53,8 +70,8 @@ export async function POST(req: Request) {
           defaultCost !== ""
             ? Number(defaultCost)
             : null,
-        apiKey: generateApiKey(),
-        status: status ?? "active",
+        apiKey,
+        status: status || "active",
         acceptedVerticals,
         notes,
       },
@@ -62,7 +79,7 @@ export async function POST(req: Request) {
 
     return Response.json({ data: supplier }, { status: 201 });
   } catch (error) {
-    console.error("Supplier POST error:", error);
+    console.error("Suppliers POST error:", error);
 
     return Response.json(
       { error: "Failed to create supplier" },

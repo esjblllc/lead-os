@@ -1,9 +1,18 @@
 import { db } from "@/lib/db";
-import { getOrCreateDefaultOrganization } from "@/lib/default-org";
+import { getRequestSessionUser, isPlatformAdmin } from "@/lib/request-session-user";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const sessionUser = await getRequestSessionUser(req);
+
+    if (!sessionUser) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const buyers = await db.buyer.findMany({
+      where: isPlatformAdmin(sessionUser)
+        ? undefined
+        : { organizationId: sessionUser.organizationId },
       orderBy: { createdAt: "desc" },
     });
 
@@ -20,10 +29,15 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const sessionUser = await getRequestSessionUser(req);
+
+    if (!sessionUser) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
 
     const {
-      organizationId,
       name,
       companyName,
       contactName,
@@ -52,14 +66,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const org =
-      organizationId
-        ? { id: organizationId }
-        : await getOrCreateDefaultOrganization();
-
     const buyer = await db.buyer.create({
       data: {
-        organizationId: org.id,
+        organizationId: sessionUser.organizationId,
         name,
         companyName,
         contactName,

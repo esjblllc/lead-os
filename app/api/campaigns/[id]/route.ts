@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { getRequestSessionUser, isPlatformAdmin } from "@/lib/request-session-user";
 
 type RouteContext = {
   params: Promise<{
@@ -6,34 +7,16 @@ type RouteContext = {
   }>;
 };
 
-export async function GET(_req: Request, context: RouteContext) {
-  const { id } = await context.params;
-
-  const campaign = await db.campaign.findUnique({
-    where: { id },
-    include: {
-      buyerLinks: {
-        include: {
-          buyer: true,
-        },
-      },
-      leads: true,
-    },
-  });
-
-  if (!campaign) {
-    return Response.json({ error: "Campaign not found" }, { status: 404 });
-  }
-
-  return Response.json({ data: campaign });
-}
-
 export async function PATCH(req: Request, context: RouteContext) {
   try {
+    const sessionUser = await getRequestSessionUser(req);
+
+    if (!sessionUser) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await context.params;
     const body = await req.json();
-
-    const { name, slug, vertical, routingMode, status } = body;
 
     const existingCampaign = await db.campaign.findUnique({
       where: { id },
@@ -43,18 +26,27 @@ export async function PATCH(req: Request, context: RouteContext) {
       return Response.json({ error: "Campaign not found" }, { status: 404 });
     }
 
-    const updatedCampaign = await db.campaign.update({
+    if (
+      !isPlatformAdmin(sessionUser) &&
+      existingCampaign.organizationId !== sessionUser.organizationId
+    ) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const campaign = await db.campaign.update({
       where: { id },
       data: {
-        ...(typeof name !== "undefined" ? { name } : {}),
-        ...(typeof slug !== "undefined" ? { slug } : {}),
-        ...(typeof vertical !== "undefined" ? { vertical } : {}),
-        ...(typeof routingMode !== "undefined" ? { routingMode } : {}),
-        ...(typeof status !== "undefined" ? { status } : {}),
+        ...(typeof body.name !== "undefined" ? { name: body.name } : {}),
+        ...(typeof body.slug !== "undefined" ? { slug: body.slug } : {}),
+        ...(typeof body.vertical !== "undefined" ? { vertical: body.vertical } : {}),
+        ...(typeof body.routingMode !== "undefined"
+          ? { routingMode: body.routingMode }
+          : {}),
+        ...(typeof body.status !== "undefined" ? { status: body.status } : {}),
       },
     });
 
-    return Response.json({ data: updatedCampaign });
+    return Response.json({ data: campaign });
   } catch (error) {
     console.error("Campaign PATCH error:", error);
 

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { getRequestSessionUser, isPlatformAdmin } from "@/lib/request-session-user";
 
 type RouteContext = {
   params: Promise<{
@@ -8,8 +9,29 @@ type RouteContext = {
 
 export async function PATCH(req: Request, context: RouteContext) {
   try {
+    const sessionUser = await getRequestSessionUser(req);
+
+    if (!sessionUser) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await context.params;
     const body = await req.json();
+
+    const existingBuyer = await db.buyer.findUnique({
+      where: { id },
+    });
+
+    if (!existingBuyer) {
+      return Response.json({ error: "Buyer not found" }, { status: 404 });
+    }
+
+    if (
+      !isPlatformAdmin(sessionUser) &&
+      existingBuyer.organizationId !== sessionUser.organizationId
+    ) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const {
       name,
@@ -105,8 +127,14 @@ export async function PATCH(req: Request, context: RouteContext) {
   }
 }
 
-export async function GET(_req: Request, context: RouteContext) {
+export async function GET(req: Request, context: RouteContext) {
   try {
+    const sessionUser = await getRequestSessionUser(req);
+
+    if (!sessionUser) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await context.params;
 
     const buyer = await db.buyer.findUnique({
@@ -118,6 +146,13 @@ export async function GET(_req: Request, context: RouteContext) {
         { error: "Buyer not found" },
         { status: 404 }
       );
+    }
+
+    if (
+      !isPlatformAdmin(sessionUser) &&
+      buyer.organizationId !== sessionUser.organizationId
+    ) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
     }
 
     return Response.json({ data: buyer });
