@@ -88,9 +88,15 @@ export default function NavLinks() {
       </Link>
 
       {canManageUsers ? (
-        <Link href="/users" className={linkClass("/users")}>
-          Users
-        </Link>
+        <>
+          <Link href="/users" className={linkClass("/users")}>
+            Users
+          </Link>
+
+          <Link href="/invites" className={linkClass("/invites")}>
+            Invites
+          </Link>
+        </>
       ) : null}
 
       <Link href="/leads" className={linkClass("/leads")}>
