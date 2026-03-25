@@ -44,14 +44,13 @@ export default function HomePage() {
     <div className="min-h-screen bg-white text-gray-900">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 lg:px-8">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">
-              RouteIQ
-            </div>
-            <div className="mt-1 text-xl font-bold tracking-tight text-gray-900">
-              Intelligent Lead Routing
-            </div>
-          </div>
+          <Link href="/" className="flex items-center">
+            <img
+              src="/logo.png"
+              alt="RouteIQ"
+              className="h-10 w-auto"
+            />
+          </Link>
 
           <div className="flex items-center gap-3">
             <Link
