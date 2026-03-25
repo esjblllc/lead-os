@@ -5,10 +5,11 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   const isPublicPath =
+    pathname === "/" || // homepage
     pathname.startsWith("/login") ||
-    pathname.startsWith("/invite") || // ✅ CRITICAL
+    pathname.startsWith("/invite") ||
     pathname.startsWith("/api/auth/login") ||
-    pathname.startsWith("/api/invites/accept") || // ✅ CRITICAL
+    pathname.startsWith("/api/invites/accept") ||
     pathname.startsWith("/api/inbound/leads") ||
     pathname.startsWith("/api/mock-buyer") ||
     pathname.startsWith("/_next") ||
