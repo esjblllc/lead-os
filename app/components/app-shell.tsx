@@ -1,17 +1,61 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import NavLinks from "./nav-links";
+
+type SessionUser = {
+  id: string;
+  email: string;
+  role: string;
+  organizationId: string;
+  organization: {
+    id: string;
+    name: string;
+  };
+};
 
 export default function AppShell({
   children,
 }: {
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const isAuthPage = pathname === "/login";
 
-  if (pathname === "/login") {
+  const [user, setUser] = useState<SessionUser | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadUser() {
+      try {
+        const res = await fetch("/api/session/me", {
+          cache: "no-store",
+        });
+
+        if (!res.ok) return;
+
+        const json = await res.json();
+
+        if (mounted) {
+          setUser(json.data || null);
+        }
+      } catch (error) {
+        console.error("Failed to load session user:", error);
+      }
+    }
+
+    if (!isAuthPage) {
+      loadUser();
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [isAuthPage]);
+
+  if (isAuthPage) {
     return <>{children}</>;
   }
 
@@ -35,7 +79,7 @@ export default function AppShell({
         </div>
 
         <div className="border-t border-gray-200 px-6 py-4 text-xs text-gray-400">
-          Local environment
+          {user?.organization?.name || "Local environment"}
         </div>
       </aside>
 
@@ -51,8 +95,16 @@ export default function AppShell({
               </div>
             </div>
 
-            <div className="rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-600">
-              Ethan Levy
+            <div className="flex items-center gap-3">
+              {user?.organization?.name ? (
+                <div className="hidden rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-500 md:block">
+                  {user.organization.name}
+                </div>
+              ) : null}
+
+              <div className="rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-600">
+                {user?.email || "Loading..."}
+              </div>
             </div>
           </div>
         </header>
