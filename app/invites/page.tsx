@@ -62,6 +62,9 @@ export default function InvitesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  const [useNewOrg, setUseNewOrg] = useState(false);
+  const [newOrgName, setNewOrgName] = useState("");
+
   const [newInvite, setNewInvite] = useState<NewInviteForm>({
     email: "",
     role: "member",
@@ -126,8 +129,13 @@ export default function InvitesPage() {
       return;
     }
 
-    if (isPlatform && !newInvite.organizationId) {
-      setCreateError("Organization is required.");
+    if (isPlatform && !useNewOrg && !newInvite.organizationId) {
+      setCreateError("Select an organization or create a new one.");
+      return;
+    }
+
+    if (isPlatform && useNewOrg && !newOrgName.trim()) {
+      setCreateError("New organization name is required.");
       return;
     }
 
@@ -142,7 +150,16 @@ export default function InvitesPage() {
         body: JSON.stringify({
           email: newInvite.email,
           role: isPlatform ? newInvite.role : "member",
-          organizationId: isPlatform ? newInvite.organizationId : null,
+          organizationId: isPlatform
+            ? useNewOrg
+              ? null
+              : newInvite.organizationId
+            : null,
+          organizationName: isPlatform
+            ? useNewOrg
+              ? newOrgName.trim()
+              : null
+            : null,
           expiresInDays: Number(newInvite.expiresInDays || "7"),
         }),
       });
@@ -160,6 +177,8 @@ export default function InvitesPage() {
         organizationId: isPlatform ? "" : sessionUser?.organizationId || "",
         expiresInDays: "7",
       });
+      setUseNewOrg(false);
+      setNewOrgName("");
 
       await fetchPageData();
     } catch (err: any) {
@@ -308,18 +327,48 @@ export default function InvitesPage() {
                   Organization
                 </label>
                 {isPlatform ? (
-                  <select
-                    value={newInvite.organizationId}
-                    onChange={(e) => updateNewInvite("organizationId", e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  >
-                    <option value="">Select organization</option>
-                    {organizations.map((org) => (
-                      <option key={org.id} value={org.id}>
-                        {org.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="space-y-2">
+                    <select
+                      disabled={useNewOrg}
+                      value={newInvite.organizationId}
+                      onChange={(e) => updateNewInvite("organizationId", e.target.value)}
+                      className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm disabled:bg-gray-100"
+                    >
+                      <option value="">Select existing organization</option>
+                      {organizations.map((org) => (
+                        <option key={org.id} value={org.id}>
+                          {org.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <label className="flex items-center gap-2 text-sm text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={useNewOrg}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setUseNewOrg(checked);
+
+                          if (checked) {
+                            updateNewInvite("organizationId", "");
+                          } else {
+                            setNewOrgName("");
+                          }
+                        }}
+                      />
+                      Create new organization
+                    </label>
+
+                    {useNewOrg ? (
+                      <input
+                        value={newOrgName}
+                        onChange={(e) => setNewOrgName(e.target.value)}
+                        placeholder="New organization name"
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                      />
+                    ) : null}
+                  </div>
                 ) : (
                   <input
                     value={sessionUser?.organization?.name || ""}

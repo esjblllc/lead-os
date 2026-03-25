@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { email, role, organizationId, expiresInDays } = body;
+    const { email, role, organizationId, organizationName, expiresInDays } = body;
 
     if (!email) {
       return Response.json(
@@ -95,11 +95,34 @@ export async function POST(req: Request) {
     let targetRole = "member";
 
     if (isPlatformAdmin(sessionUser)) {
-      targetOrganizationId = organizationId || sessionUser.organizationId;
       targetRole = role || "admin";
+
+      if (organizationId) {
+        targetOrganizationId = organizationId;
+      } else if (organizationName && String(organizationName).trim()) {
+        const trimmedName = String(organizationName).trim();
+
+        const existingOrg = await db.organization.findFirst({
+          where: { name: trimmedName },
+        });
+
+        if (existingOrg) {
+          targetOrganizationId = existingOrg.id;
+        } else {
+          const createdOrg = await db.organization.create({
+            data: { name: trimmedName },
+          });
+          targetOrganizationId = createdOrg.id;
+        }
+      } else {
+        return Response.json(
+          { error: "Organization is required" },
+          { status: 400 }
+        );
+      }
     } else {
-      targetOrganizationId = sessionUser.organizationId;
       targetRole = "member";
+      targetOrganizationId = sessionUser.organizationId;
     }
 
     const invite = await db.invite.create({
