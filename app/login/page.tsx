@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 export default function LoginPage() {
   const router = useRouter();
 
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   async function handleLogin(e: React.FormEvent) {
@@ -17,14 +17,15 @@ export default function LoginPage() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ email, password }),
     });
 
     if (res.ok) {
       router.push("/");
       router.refresh();
     } else {
-      alert("Invalid login");
+      const data = await res.json().catch(() => null);
+      alert(data?.error || "Invalid login");
     }
   }
 
@@ -37,9 +38,10 @@ export default function LoginPage() {
         <h1 className="text-xl font-bold">Lead OS Login</h1>
 
         <input
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           className="w-full rounded border p-2"
         />
 
