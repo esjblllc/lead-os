@@ -1,21 +1,53 @@
 import { NextResponse } from "next/server";
 import { createSessionToken, getSessionCookieName } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { verifyPassword } from "@/lib/password";
 
 export async function POST(req: Request) {
   try {
-    const { username, password } = await req.json();
+    const { username, email, password } = await req.json();
+    const loginValue = email || username;
 
+    if (!loginValue || !password) {
+      return Response.json(
+        { error: "Missing username/email or password" },
+        { status: 400 }
+      );
+    }
+
+    const user = await db.user.findFirst({
+      where: {
+        email: loginValue,
+        status: "active",
+      },
+    });
+
+    let authenticated = false;
+    let sessionIdentity = loginValue;
+
+    if (user) {
+      authenticated = await verifyPassword(password, user.passwordHash);
+      sessionIdentity = user.email;
+    }
+
+    // Temporary fallback so you can still log in while we finish DB auth verification
     if (
-      username !== process.env.ADMIN_USERNAME ||
-      password !== process.env.ADMIN_PASSWORD
+      !authenticated &&
+      loginValue === "admin" &&
+      password === "admin123"
     ) {
+      authenticated = true;
+      sessionIdentity = "admin";
+    }
+
+    if (!authenticated) {
       return Response.json(
         { error: "Invalid credentials" },
         { status: 401 }
       );
     }
 
-    const token = await createSessionToken(username);
+    const token = await createSessionToken(sessionIdentity);
 
     const res = NextResponse.json({ success: true });
 
