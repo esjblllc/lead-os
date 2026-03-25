@@ -95,6 +95,7 @@ export default function AcceptInvitePage() {
     try {
       setSubmitting(true);
 
+      // STEP 1 — accept invite
       const res = await fetch("/api/invites/accept", {
         method: "POST",
         headers: {
@@ -112,10 +113,31 @@ export default function AcceptInvitePage() {
         throw new Error(json?.error || "Failed to accept invite");
       }
 
-      setSuccess("Account created successfully. Redirecting to login...");
+      const email = json?.email || invite?.email;
+
+      // STEP 2 — auto login
+      const loginRes = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
+
+      if (!loginRes.ok) {
+        throw new Error("Account created, but login failed");
+      }
+
+      setSuccess("Account created. Logging you in...");
+
+      // STEP 3 — redirect into app
       setTimeout(() => {
-        router.push("/login");
-      }, 1500);
+        router.push("/");
+      }, 800);
+
     } catch (err: any) {
       setError(err?.message || "Failed to accept invite");
     } finally {
@@ -183,17 +205,17 @@ export default function AcceptInvitePage() {
                 />
               </div>
 
-              {error ? (
+              {error && (
                 <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {error}
                 </div>
-              ) : null}
+              )}
 
-              {success ? (
+              {success && (
                 <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
                   {success}
                 </div>
-              ) : null}
+              )}
 
               <button
                 type="submit"
