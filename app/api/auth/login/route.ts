@@ -30,12 +30,8 @@ export async function POST(req: Request) {
       sessionIdentity = user.email;
     }
 
-    // Temporary fallback so you can still log in while we finish DB auth verification
-    if (
-      !authenticated &&
-      loginValue === "admin" &&
-      password === "admin123"
-    ) {
+    // Temporary fallback while DB-backed auth is being verified
+    if (!authenticated && loginValue === "admin" && password === "admin123") {
       authenticated = true;
       sessionIdentity = "admin";
     }
