@@ -3,6 +3,7 @@ export const revalidate = 0;
 
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { requireCurrentUser, isPlatformAdmin } from "@/lib/session-user";
 
 type LogEvent = {
   id: string;
@@ -162,6 +163,8 @@ export default async function LogsPage({
     status?: string;
   }>;
 }) {
+  const user = await requireCurrentUser();
+
   const resolvedSearchParams = (await searchParams) || {};
   const range = resolvedSearchParams.range || "all";
   const from = resolvedSearchParams.from || "";
@@ -171,25 +174,41 @@ export default async function LogsPage({
 
   const { startDate, endDate } = getDateBounds(range, from, to);
 
-  const pingWhere =
-    startDate || endDate
+  const pingWhere = {
+    ...(startDate || endDate
       ? {
           createdAt: {
             ...(startDate ? { gte: startDate } : {}),
             ...(endDate ? { lte: endDate } : {}),
           },
         }
-      : undefined;
+      : {}),
+    ...(isPlatformAdmin(user)
+      ? {}
+      : {
+          lead: {
+            organizationId: user.organizationId,
+          },
+        }),
+  };
 
-  const deliveryWhere =
-    startDate || endDate
+  const deliveryWhere = {
+    ...(startDate || endDate
       ? {
           createdAt: {
             ...(startDate ? { gte: startDate } : {}),
             ...(endDate ? { lte: endDate } : {}),
           },
         }
-      : undefined;
+      : {}),
+    ...(isPlatformAdmin(user)
+      ? {}
+      : {
+          lead: {
+            organizationId: user.organizationId,
+          },
+        }),
+  };
 
   const [pings, deliveries] = await Promise.all([
     db.pingResult.findMany({
