@@ -21,7 +21,9 @@ export default function AppShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isAuthPage = pathname === "/login";
+
+  const isPublicShellFreePage =
+    pathname === "/login" || pathname.startsWith("/invite");
 
   const [user, setUser] = useState<SessionUser | null>(null);
 
@@ -46,16 +48,16 @@ export default function AppShell({
       }
     }
 
-    if (!isAuthPage) {
+    if (!isPublicShellFreePage) {
       loadUser();
     }
 
     return () => {
       mounted = false;
     };
-  }, [isAuthPage]);
+  }, [isPublicShellFreePage]);
 
-  if (isAuthPage) {
+  if (isPublicShellFreePage) {
     return <>{children}</>;
   }
 
