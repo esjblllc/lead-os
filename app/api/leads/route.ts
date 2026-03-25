@@ -1,9 +1,22 @@
 import { db } from "@/lib/db";
 import { createLeadFromPayload } from "@/lib/lead-ingestion";
+import {
+  getRequestSessionUser,
+  isPlatformAdmin,
+} from "@/lib/request-session-user";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const sessionUser = await getRequestSessionUser(req);
+
+    if (!sessionUser) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const leads = await db.lead.findMany({
+      where: isPlatformAdmin(sessionUser)
+        ? undefined
+        : { organizationId: sessionUser.organizationId },
       orderBy: { createdAt: "desc" },
       include: {
         campaign: true,
@@ -33,12 +46,43 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const sessionUser = await getRequestSessionUser(req);
+
+    if (!sessionUser) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
 
     if (!body?.campaignId) {
       return Response.json(
         { error: "campaignId is required" },
         { status: 400 }
+      );
+    }
+
+    const campaign = await db.campaign.findUnique({
+      where: { id: body.campaignId },
+      select: {
+        id: true,
+        organizationId: true,
+      },
+    });
+
+    if (!campaign) {
+      return Response.json(
+        { error: "Campaign not found" },
+        { status: 404 }
+      );
+    }
+
+    if (
+      !isPlatformAdmin(sessionUser) &&
+      campaign.organizationId !== sessionUser.organizationId
+    ) {
+      return Response.json(
+        { error: "Forbidden" },
+        { status: 403 }
       );
     }
 
@@ -52,8 +96,8 @@ export async function POST(req: Request) {
       message === "Campaign not found" || message === "Supplier not found"
         ? 404
         : message === "campaignId is required"
-        ? 400
-        : 500;
+          ? 400
+          : 500;
 
     return Response.json(
       { error: "Failed to create lead", details: message },
