@@ -48,7 +48,7 @@ export default function HomePage() {
             <img
               src="/logo.png"
               alt="RouteIQ"
-              className="h-14 w-auto"
+              className="h-24 w-auto"
             />
           </Link>
 
