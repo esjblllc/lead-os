@@ -17,6 +17,7 @@ model Organization {
   leads     Lead[]
   suppliers Supplier[]
   users     User[]
+  invites   Invite[]
 }
 
 model User {
@@ -30,6 +31,23 @@ model User {
   updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+model Invite {
+  id             String   @id @default(uuid())
+  organizationId String
+  email          String
+  role           String   @default("member")
+  token          String   @unique
+  status         String   @default("pending")
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
 }
 
 model Buyer {
