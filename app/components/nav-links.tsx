@@ -2,9 +2,50 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+
+type SessionUser = {
+  id: string;
+  email: string;
+  role: string;
+  organizationId: string;
+  organization: {
+    id: string;
+    name: string;
+  };
+};
 
 export default function NavLinks() {
   const pathname = usePathname();
+  const [user, setUser] = useState<SessionUser | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadUser() {
+      try {
+        const res = await fetch("/api/session/me", {
+          cache: "no-store",
+        });
+
+        if (!res.ok) return;
+
+        const json = await res.json();
+
+        if (mounted) {
+          setUser(json.data || null);
+        }
+      } catch (error) {
+        console.error("Failed to load nav session user:", error);
+      }
+    }
+
+    loadUser();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const isActive = (path: string) =>
     pathname === path || (path !== "/" && pathname.startsWith(path));
@@ -15,6 +56,9 @@ export default function NavLinks() {
         ? "bg-blue-600 text-white shadow-sm"
         : "text-gray-700 hover:bg-gray-100"
     }`;
+
+  const canManageUsers =
+    user?.role === "platform_admin" || user?.role === "admin";
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -43,10 +87,11 @@ export default function NavLinks() {
         Campaigns
       </Link>
 
-      {/* ✅ NEW USERS PAGE */}
-      <Link href="/users" className={linkClass("/users")}>
-        Users
-      </Link>
+      {canManageUsers ? (
+        <Link href="/users" className={linkClass("/users")}>
+          Users
+        </Link>
+      ) : null}
 
       <Link href="/leads" className={linkClass("/leads")}>
         Leads

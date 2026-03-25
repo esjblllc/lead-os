@@ -17,6 +17,14 @@ type UserRecord = {
   createdAt?: string;
 };
 
+type SessionUser = {
+  id: string;
+  email: string;
+  role: string;
+  organizationId: string;
+  organization: Organization;
+};
+
 type UserDraft = {
   email: string;
   password: string;
@@ -45,6 +53,7 @@ function statusBadgeClass(status: string) {
 }
 
 export default function UsersPage() {
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,39 +70,64 @@ export default function UsersPage() {
   const [newUser, setNewUser] = useState<NewUserForm>({
     email: "",
     password: "",
-    role: "admin",
+    role: "member",
     status: "active",
     organizationId: "",
     organizationName: "",
   });
 
-  async function fetchUsers() {
-    const res = await fetch("/api/users");
-    const json = await res.json();
+  const isPlatform = sessionUser?.role === "platform_admin";
+  const canManageUsers =
+    sessionUser?.role === "platform_admin" || sessionUser?.role === "admin";
 
-    const nextUsers = json.data || [];
-    const nextOrganizations = json.organizations || [];
+  async function fetchPageData() {
+    try {
+      const [sessionRes, usersRes] = await Promise.all([
+        fetch("/api/session/me", { cache: "no-store" }),
+        fetch("/api/users", { cache: "no-store" }),
+      ]);
 
-    setUsers(nextUsers);
-    setOrganizations(nextOrganizations);
+      const sessionJson = sessionRes.ok ? await sessionRes.json() : { data: null };
+      const usersJson = usersRes.ok
+        ? await usersRes.json()
+        : { data: [], organizations: [] };
 
-    const nextDrafts: Record<string, UserDraft> = {};
-    nextUsers.forEach((user: UserRecord) => {
-      nextDrafts[user.id] = {
-        email: user.email,
-        password: "",
-        role: user.role,
-        status: user.status,
-        organizationId: user.organizationId,
-      };
-    });
+      const currentUser = sessionJson.data || null;
 
-    setDrafts(nextDrafts);
-    setLoading(false);
+      setSessionUser(currentUser);
+      setUsers(usersJson.data || []);
+      setOrganizations(usersJson.organizations || []);
+
+      const nextDrafts: Record<string, UserDraft> = {};
+      (usersJson.data || []).forEach((user: UserRecord) => {
+        nextDrafts[user.id] = {
+          email: user.email,
+          password: "",
+          role: user.role,
+          status: user.status,
+          organizationId: user.organizationId,
+        };
+      });
+
+      setDrafts(nextDrafts);
+
+      if (currentUser?.role !== "platform_admin") {
+        setNewUser((prev) => ({
+          ...prev,
+          role: "member",
+          organizationId: currentUser?.organizationId || "",
+          organizationName: "",
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to load users page:", error);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    fetchUsers();
+    fetchPageData();
   }, []);
 
   function updateDraft(id: string, field: keyof UserDraft, value: string) {
@@ -123,7 +157,11 @@ export default function UsersPage() {
       return;
     }
 
-    if (!newUser.organizationId && !newUser.organizationName.trim()) {
+    if (
+      isPlatform &&
+      !newUser.organizationId &&
+      !newUser.organizationName.trim()
+    ) {
       setCreateError("Select an organization or enter a new organization name.");
       return;
     }
@@ -139,12 +177,14 @@ export default function UsersPage() {
         body: JSON.stringify({
           email: newUser.email,
           password: newUser.password,
-          role: newUser.role,
+          role: isPlatform ? newUser.role : "member",
           status: newUser.status,
-          organizationId: newUser.organizationId || null,
-          organizationName: newUser.organizationId
-            ? null
-            : newUser.organizationName || null,
+          organizationId: isPlatform ? newUser.organizationId || null : null,
+          organizationName: isPlatform
+            ? newUser.organizationId
+              ? null
+              : newUser.organizationName || null
+            : null,
         }),
       });
 
@@ -158,13 +198,13 @@ export default function UsersPage() {
       setNewUser({
         email: "",
         password: "",
-        role: "admin",
+        role: isPlatform ? "admin" : "member",
         status: "active",
-        organizationId: "",
+        organizationId: isPlatform ? "" : sessionUser?.organizationId || "",
         organizationName: "",
       });
 
-      await fetchUsers();
+      await fetchPageData();
     } catch (err: any) {
       setCreateError(err?.message || "Failed to create user");
     } finally {
@@ -187,9 +227,9 @@ export default function UsersPage() {
         body: JSON.stringify({
           email: draft.email,
           password: draft.password || undefined,
-          role: draft.role,
+          role: isPlatform ? draft.role : undefined,
           status: draft.status,
-          organizationId: draft.organizationId,
+          organizationId: isPlatform ? draft.organizationId : undefined,
         }),
       });
 
@@ -197,7 +237,7 @@ export default function UsersPage() {
         throw new Error("Failed to update user");
       }
 
-      await fetchUsers();
+      await fetchPageData();
     } catch (error) {
       console.error("Save user error:", error);
     } finally {
@@ -239,6 +279,17 @@ export default function UsersPage() {
     return <div className="p-6 text-sm text-gray-500">Loading users...</div>;
   }
 
+  if (!canManageUsers) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Users</h1>
+        <p className="mt-2 text-sm text-gray-500">
+          You do not have permission to manage users.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -250,7 +301,9 @@ export default function UsersPage() {
             User Management
           </h1>
           <p className="mt-2 text-sm text-gray-500">
-            Create user accounts for testers and assign them to organizations.
+            {isPlatform
+              ? "Manage users across organizations, roles, and account status."
+              : `Manage users in ${sessionUser?.organization?.name || "your organization"}.`}
           </p>
         </div>
 
@@ -265,7 +318,9 @@ export default function UsersPage() {
                   New User
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Create a login and assign the user to an existing or new organization.
+                  {isPlatform
+                    ? "Create a login and assign the user to an existing or new organization."
+                    : "Create a user inside your organization."}
                 </p>
               </div>
 
@@ -308,15 +363,23 @@ export default function UsersPage() {
                 <label className="mb-2 block text-sm font-medium text-gray-700">
                   Role
                 </label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => updateNewUser("role", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="platform_admin">platform_admin</option>
-                  <option value="admin">admin</option>
-                  <option value="member">member</option>
-                </select>
+                {isPlatform ? (
+                  <select
+                    value={newUser.role}
+                    onChange={(e) => updateNewUser("role", e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="platform_admin">platform_admin</option>
+                    <option value="admin">admin</option>
+                    <option value="member">member</option>
+                  </select>
+                ) : (
+                  <input
+                    value="member"
+                    disabled
+                    className="w-full rounded-xl border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-500"
+                  />
+                )}
               </div>
 
               <div>
@@ -333,37 +396,54 @@ export default function UsersPage() {
                 </select>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Existing Organization
-                </label>
-                <select
-                  value={newUser.organizationId}
-                  onChange={(e) => updateNewUser("organizationId", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">Select organization</option>
-                  {organizations.map((org) => (
-                    <option key={org.id} value={org.id}>
-                      {org.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {isPlatform ? (
+                <>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Existing Organization
+                    </label>
+                    <select
+                      value={newUser.organizationId}
+                      onChange={(e) =>
+                        updateNewUser("organizationId", e.target.value)
+                      }
+                      className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                    >
+                      <option value="">Select organization</option>
+                      {organizations.map((org) => (
+                        <option key={org.id} value={org.id}>
+                          {org.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Or New Organization Name
-                </label>
-                <input
-                  value={newUser.organizationName}
-                  onChange={(e) =>
-                    updateNewUser("organizationName", e.target.value)
-                  }
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  placeholder="Friend Test Org"
-                />
-              </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Or New Organization Name
+                    </label>
+                    <input
+                      value={newUser.organizationName}
+                      onChange={(e) =>
+                        updateNewUser("organizationName", e.target.value)
+                      }
+                      className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                      placeholder="Friend Test Org"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Organization
+                  </label>
+                  <input
+                    value={sessionUser?.organization?.name || ""}
+                    disabled
+                    className="w-full rounded-xl border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-500"
+                  />
+                </div>
+              )}
             </div>
 
             {createError ? (
@@ -508,17 +588,25 @@ export default function UsersPage() {
                                 <label className="mb-2 block text-sm font-medium text-gray-700">
                                   Role
                                 </label>
-                                <select
-                                  value={draft?.role || "admin"}
-                                  onChange={(e) =>
-                                    updateDraft(user.id, "role", e.target.value)
-                                  }
-                                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                                >
-                                  <option value="platform_admin">platform_admin</option>
-                                  <option value="admin">admin</option>
-                                  <option value="member">member</option>
-                                </select>
+                                {isPlatform ? (
+                                  <select
+                                    value={draft?.role || "admin"}
+                                    onChange={(e) =>
+                                      updateDraft(user.id, "role", e.target.value)
+                                    }
+                                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                  >
+                                    <option value="platform_admin">platform_admin</option>
+                                    <option value="admin">admin</option>
+                                    <option value="member">member</option>
+                                  </select>
+                                ) : (
+                                  <input
+                                    value={user.role}
+                                    disabled
+                                    className="w-full rounded-xl border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-500"
+                                  />
+                                )}
                               </div>
 
                               <div>
@@ -541,23 +629,31 @@ export default function UsersPage() {
                                 <label className="mb-2 block text-sm font-medium text-gray-700">
                                   Organization
                                 </label>
-                                <select
-                                  value={draft?.organizationId || ""}
-                                  onChange={(e) =>
-                                    updateDraft(
-                                      user.id,
-                                      "organizationId",
-                                      e.target.value
-                                    )
-                                  }
-                                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                                >
-                                  {organizations.map((org) => (
-                                    <option key={org.id} value={org.id}>
-                                      {org.name}
-                                    </option>
-                                  ))}
-                                </select>
+                                {isPlatform ? (
+                                  <select
+                                    value={draft?.organizationId || ""}
+                                    onChange={(e) =>
+                                      updateDraft(
+                                        user.id,
+                                        "organizationId",
+                                        e.target.value
+                                      )
+                                    }
+                                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                  >
+                                    {organizations.map((org) => (
+                                      <option key={org.id} value={org.id}>
+                                        {org.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <input
+                                    value={user.organization?.name || ""}
+                                    disabled
+                                    className="w-full rounded-xl border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-500"
+                                  />
+                                )}
                               </div>
                             </div>
 
