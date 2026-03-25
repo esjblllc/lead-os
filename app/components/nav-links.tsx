@@ -62,12 +62,12 @@ export default function NavLinks() {
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    window.location.href = "/login";
+    window.location.href = "/dashboard";
   }
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Link href="/" className={linkClass("/")}>
+      <Link href="/dashboard" className={linkClass("/")}>
         Dashboard
       </Link>
 
