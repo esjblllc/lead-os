@@ -56,14 +56,14 @@ export default function HomePage() {
           <div className="flex items-center gap-3">
             <Link
               href="/login"
-              className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
             >
               Login
             </Link>
 
             <a
               href="#contact"
-              className="rounded-xl border border-black bg-black px-4 py-2 text-sm font-medium text-white"
+              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
             >
               Request Access
             </a>
@@ -93,14 +93,14 @@ export default function HomePage() {
               <div className="mt-8 flex flex-wrap gap-4">
                 <Link
                   href="/login"
-                  className="rounded-2xl border border-black bg-black px-6 py-3 text-sm font-medium text-white"
+                  className="rounded-2xl bg-blue-600 px-6 py-3 text-sm font-medium text-white transition hover:bg-blue-700"
                 >
-                  Login to RouteIQ
+                  Log in to RouteIQ
                 </Link>
 
                 <a
                   href="#how-it-works"
-                  className="rounded-2xl border border-gray-300 bg-white px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  className="rounded-2xl border border-gray-300 bg-white px-6 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                 >
                   See How It Works
                 </a>
