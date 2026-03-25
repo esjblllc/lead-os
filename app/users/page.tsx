@@ -313,6 +313,7 @@ export default function UsersPage() {
                   onChange={(e) => updateNewUser("role", e.target.value)}
                   className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
                 >
+                  <option value="platform_admin">platform_admin</option>
                   <option value="admin">admin</option>
                   <option value="member">member</option>
                 </select>
@@ -514,6 +515,7 @@ export default function UsersPage() {
                                   }
                                   className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
                                 >
+                                  <option value="platform_admin">platform_admin</option>
                                   <option value="admin">admin</option>
                                   <option value="member">member</option>
                                 </select>
