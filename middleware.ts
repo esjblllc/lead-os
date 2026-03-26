@@ -8,6 +8,8 @@ export async function middleware(req: NextRequest) {
     pathname === "/" ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/invite") ||
+    pathname.startsWith("/select-suite") ||
+    pathname.startsWith("/t/") || // <- tracking redirects must be public
     pathname.startsWith("/api/auth/login") ||
     pathname.startsWith("/api/invites/accept") ||
     pathname.startsWith("/api/inbound/leads") ||
