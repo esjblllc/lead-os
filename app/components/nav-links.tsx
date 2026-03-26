@@ -84,6 +84,7 @@ export default function NavLinks() {
       items: [
         { label: "Dashboard", href: "/dashboard" },
         { label: "Reports", href: "/performance" },
+        { label: "Variance", href: "/performance/variance" },
         { label: "Accounting", href: "/accounting" },
         { label: "Logs", href: "/logs" },
         { label: "Monitoring", href: "/monitoring" },

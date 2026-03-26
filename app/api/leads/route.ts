@@ -22,6 +22,8 @@ export async function GET(req: Request) {
         campaign: true,
         assignedBuyer: true,
         supplier: true,
+        trackingCampaign: true,
+        trackingLink: true,
         deliveries: {
           orderBy: { createdAt: "desc" },
         },
@@ -38,7 +40,10 @@ export async function GET(req: Request) {
   } catch (error: any) {
     console.error("Leads GET error:", error);
     return Response.json(
-      { error: "Failed to load leads", details: error?.message ?? "Unknown error" },
+      {
+        error: "Failed to load leads",
+        details: error?.message ?? "Unknown error",
+      },
       { status: 500 }
     );
   }
@@ -70,23 +75,32 @@ export async function POST(req: Request) {
     });
 
     if (!campaign) {
-      return Response.json(
-        { error: "Campaign not found" },
-        { status: 404 }
-      );
+      return Response.json({ error: "Campaign not found" }, { status: 404 });
     }
 
     if (
       !isPlatformAdmin(sessionUser) &&
       campaign.organizationId !== sessionUser.organizationId
     ) {
-      return Response.json(
-        { error: "Forbidden" },
-        { status: 403 }
-      );
+      return Response.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const lead = await createLeadFromPayload(body);
+    const lead = await createLeadFromPayload({
+      campaignId: body.campaignId,
+      supplierId: body.supplierId ?? null,
+      firstName: body.firstName ?? null,
+      lastName: body.lastName ?? null,
+      email: body.email ?? null,
+      phone: body.phone ?? null,
+      state: body.state ?? null,
+      zip: body.zip ?? null,
+      source: body.source ?? null,
+      subId: body.subId ?? null,
+      publisherId: body.publisherId ?? null,
+      cost: body.cost ?? null,
+      clickId: body.clickId ?? null,
+    });
+
     return Response.json({ data: lead }, { status: 201 });
   } catch (error: any) {
     console.error("Lead POST error:", error);
