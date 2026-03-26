@@ -57,12 +57,16 @@ export default function NavLinks() {
     };
   }, []);
 
-  const isTrackingSuite = pathname === "/tracking" || pathname.startsWith("/tracking/");
+  const isTrackingSuite =
+    pathname === "/tracking" || pathname.startsWith("/tracking/");
   const canManageUsers =
     user?.role === "platform_admin" || user?.role === "admin";
 
   const isActive = (path: string) =>
-    pathname === path || (path !== "/dashboard" && path !== "/tracking" && pathname.startsWith(path));
+    pathname === path ||
+    (path !== "/dashboard" &&
+      path !== "/tracking" &&
+      pathname.startsWith(path));
 
   const linkClass = (path: string) =>
     `group flex min-h-[44px] items-center rounded-xl px-4 py-3 text-sm font-medium transition-all ${
@@ -102,9 +106,7 @@ export default function NavLinks() {
   const trackingSections: NavSection[] = [
     {
       title: "Overview",
-      items: [
-        { label: "Tracking Dashboard", href: "/tracking" },
-      ],
+      items: [{ label: "Tracking Dashboard", href: "/tracking" }],
     },
     {
       title: "Setup",
@@ -133,8 +135,8 @@ export default function NavLinks() {
     : null;
 
   const sections = useMemo(() => {
-    const base = isTrackingSuite ? trackingSections : leadSections;
-    return accessSection ? [...base, accessSection] : base;
+    const baseSections = isTrackingSuite ? trackingSections : leadSections;
+    return accessSection ? [...baseSections, accessSection] : baseSections;
   }, [isTrackingSuite, accessSection]);
 
   async function handleLogout() {
@@ -156,7 +158,11 @@ export default function NavLinks() {
           <div className={sectionLabelClass}>{section.title}</div>
 
           {section.items.map((item) => (
-            <Link key={item.href} href={item.href} className={linkClass(item.href)}>
+            <Link
+              key={item.href}
+              href={item.href}
+              className={linkClass(item.href)}
+            >
               {item.label}
             </Link>
           ))}
