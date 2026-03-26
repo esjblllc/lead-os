@@ -121,6 +121,7 @@ export default function NavLinks() {
       items: [
         { label: "Click Logs", href: "/tracking/clicks" },
         { label: "Tracking Reports", href: "/tracking/reports" },
+        { label: "Tracking Variance", href: "/tracking/reports/variance" },
       ],
     },
   ];
