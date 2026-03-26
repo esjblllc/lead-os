@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type SessionUser = {
   id: string;
@@ -13,6 +13,16 @@ type SessionUser = {
     id: string;
     name: string;
   };
+};
+
+type NavItem = {
+  label: string;
+  href: string;
+};
+
+type NavSection = {
+  title: string;
+  items: NavItem[];
 };
 
 export default function NavLinks() {
@@ -47,8 +57,12 @@ export default function NavLinks() {
     };
   }, []);
 
+  const isTrackingSuite = pathname === "/tracking" || pathname.startsWith("/tracking/");
+  const canManageUsers =
+    user?.role === "platform_admin" || user?.role === "admin";
+
   const isActive = (path: string) =>
-    pathname === path || (path !== "/dashboard" && pathname.startsWith(path));
+    pathname === path || (path !== "/dashboard" && path !== "/tracking" && pathname.startsWith(path));
 
   const linkClass = (path: string) =>
     `group flex min-h-[44px] items-center rounded-xl px-4 py-3 text-sm font-medium transition-all ${
@@ -60,8 +74,68 @@ export default function NavLinks() {
   const sectionLabelClass =
     "px-4 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400";
 
-  const canManageUsers =
-    user?.role === "platform_admin" || user?.role === "admin";
+  const leadSections: NavSection[] = [
+    {
+      title: "Overview",
+      items: [
+        { label: "Dashboard", href: "/dashboard" },
+        { label: "Reports", href: "/performance" },
+        { label: "Accounting", href: "/accounting" },
+        { label: "Logs", href: "/logs" },
+        { label: "Monitoring", href: "/monitoring" },
+      ],
+    },
+    {
+      title: "Operations",
+      items: [
+        { label: "Buyers", href: "/buyers" },
+        { label: "Buyer Specs", href: "/buyer-specs" },
+        { label: "Suppliers", href: "/suppliers" },
+        { label: "Campaigns", href: "/campaigns" },
+        { label: "Leads", href: "/leads" },
+        { label: "Deliveries", href: "/deliveries" },
+        { label: "Inbound Specs", href: "/inbound" },
+      ],
+    },
+  ];
+
+  const trackingSections: NavSection[] = [
+    {
+      title: "Overview",
+      items: [
+        { label: "Tracking Dashboard", href: "/tracking" },
+      ],
+    },
+    {
+      title: "Setup",
+      items: [
+        { label: "Tracking Campaigns", href: "/tracking/campaigns" },
+        { label: "Tracking Links", href: "/tracking/links" },
+      ],
+    },
+    {
+      title: "Analysis",
+      items: [
+        { label: "Click Logs", href: "/tracking/clicks" },
+        { label: "Tracking Reports", href: "/tracking/reports" },
+      ],
+    },
+  ];
+
+  const accessSection: NavSection | null = canManageUsers
+    ? {
+        title: "Access",
+        items: [
+          { label: "Users", href: "/users" },
+          { label: "Invites", href: "/invites" },
+        ],
+      }
+    : null;
+
+  const sections = useMemo(() => {
+    const base = isTrackingSuite ? trackingSections : leadSections;
+    return accessSection ? [...base, accessSection] : base;
+  }, [isTrackingSuite, accessSection]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -70,71 +144,24 @@ export default function NavLinks() {
 
   return (
     <div className="flex flex-col gap-1">
-      <div className={sectionLabelClass}>Overview</div>
-
-      <Link href="/dashboard" className={linkClass("/dashboard")}>
-        Dashboard
+      <Link
+        href="/select-suite"
+        className="mb-2 flex min-h-[44px] items-center rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+      >
+        Switch Suite
       </Link>
 
-      <Link href="/performance" className={linkClass("/performance")}>
-        Reports
-      </Link>
+      {sections.map((section) => (
+        <div key={section.title}>
+          <div className={sectionLabelClass}>{section.title}</div>
 
-      <Link href="/accounting" className={linkClass("/accounting")}>
-        Accounting
-      </Link>
-
-      <Link href="/logs" className={linkClass("/logs")}>
-        Logs
-      </Link>
-
-      <Link href="/monitoring" className={linkClass("/monitoring")}>
-        Monitoring
-      </Link>
-
-      <div className={sectionLabelClass}>Operations</div>
-
-      <Link href="/buyers" className={linkClass("/buyers")}>
-        Buyers
-      </Link>
-
-      <Link href="/buyer-specs" className={linkClass("/buyer-specs")}>
-        Buyer Specs
-      </Link>
-
-      <Link href="/suppliers" className={linkClass("/suppliers")}>
-        Suppliers
-      </Link>
-
-      <Link href="/campaigns" className={linkClass("/campaigns")}>
-        Campaigns
-      </Link>
-
-      <Link href="/leads" className={linkClass("/leads")}>
-        Leads
-      </Link>
-
-      <Link href="/deliveries" className={linkClass("/deliveries")}>
-        Deliveries
-      </Link>
-
-      <Link href="/inbound" className={linkClass("/inbound")}>
-        Inbound Specs
-      </Link>
-
-      {canManageUsers ? (
-        <>
-          <div className={sectionLabelClass}>Access</div>
-
-          <Link href="/users" className={linkClass("/users")}>
-            Users
-          </Link>
-
-          <Link href="/invites" className={linkClass("/invites")}>
-            Invites
-          </Link>
-        </>
-      ) : null}
+          {section.items.map((item) => (
+            <Link key={item.href} href={item.href} className={linkClass(item.href)}>
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      ))}
 
       <button
         onClick={handleLogout}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import NavLinks from "./nav-links";
 
@@ -27,6 +27,8 @@ export default function AppShell({
     pathname === "/login" ||
     pathname === "/select-suite" ||
     pathname.startsWith("/invite");
+
+  const isTrackingSuite = pathname === "/tracking" || pathname.startsWith("/tracking/");
 
   const [user, setUser] = useState<SessionUser | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -65,23 +67,42 @@ export default function AppShell({
     setMobileNavOpen(false);
   }, [pathname]);
 
+  const suiteMeta = useMemo(() => {
+    if (isTrackingSuite) {
+      return {
+        eyebrow: "RouteIQ",
+        title: "Link Tracking Suite",
+        subtitle: "Campaigns, links, click logs, and traffic reporting",
+        headerLabel: "Front-end traffic tracking",
+        headerTitle: "Tracking Console",
+      };
+    }
+
+    return {
+      eyebrow: "RouteIQ",
+      title: "Lead Tracking Suite",
+      subtitle: "Routing, reporting, monitoring, and accounting",
+      headerLabel: "Lead management platform",
+      headerTitle: "Admin Console",
+    };
+  }, [isTrackingSuite]);
+
   if (isPublicShellFreePage) {
     return <>{children}</>;
   }
 
   return (
     <div className="flex min-h-screen bg-[#f5f7fb]">
-      {/* Desktop sidebar */}
       <aside className="hidden w-72 shrink-0 border-r border-gray-200 bg-white lg:flex lg:flex-col">
         <div className="border-b border-gray-200 px-6 py-5">
           <div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">
-            RouteIQ
+            {suiteMeta.eyebrow}
           </div>
           <div className="mt-2 text-2xl font-bold tracking-tight text-gray-900">
-            Operations
+            {suiteMeta.title}
           </div>
           <div className="mt-1 text-sm text-gray-500">
-            Routing, reporting, monitoring, and accounting
+            {suiteMeta.subtitle}
           </div>
         </div>
 
@@ -94,7 +115,6 @@ export default function AppShell({
         </div>
       </aside>
 
-      {/* Mobile drawer backdrop */}
       {mobileNavOpen ? (
         <button
           type="button"
@@ -104,7 +124,6 @@ export default function AppShell({
         />
       ) : null}
 
-      {/* Mobile drawer */}
       <div
         className={`fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] transform border-r border-gray-200 bg-white shadow-xl transition-transform duration-200 ease-out lg:hidden ${
           mobileNavOpen ? "translate-x-0" : "-translate-x-full"
@@ -114,10 +133,10 @@ export default function AppShell({
           <div className="flex items-start justify-between border-b border-gray-200 px-5 py-4">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">
-                RouteIQ
+                {suiteMeta.eyebrow}
               </div>
               <div className="mt-1 text-xl font-bold tracking-tight text-gray-900">
-                Operations
+                {suiteMeta.title}
               </div>
               <div className="mt-1 text-sm text-gray-500">
                 {user?.organization?.name || "Workspace"}
@@ -159,10 +178,10 @@ export default function AppShell({
 
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium text-gray-500">
-                  Lead management platform
+                  {suiteMeta.headerLabel}
                 </div>
                 <div className="truncate text-xl font-semibold tracking-tight text-gray-900">
-                  Admin Console
+                  {suiteMeta.headerTitle}
                 </div>
               </div>
             </div>
