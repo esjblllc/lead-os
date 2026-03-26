@@ -25,6 +25,7 @@ export default function AppShell({
   const isPublicShellFreePage =
     pathname === "/" ||
     pathname === "/login" ||
+    pathname === "/select-suite" ||
     pathname.startsWith("/invite");
 
   const [user, setUser] = useState<SessionUser | null>(null);
