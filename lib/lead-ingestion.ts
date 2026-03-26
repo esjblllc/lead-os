@@ -350,6 +350,7 @@ type CreateLeadInput = {
   subId?: string | null;
   publisherId?: string | null;
   cost?: unknown;
+  clickId?: string | null;
 };
 
 export async function createLeadFromPayload(body: CreateLeadInput) {
@@ -366,6 +367,7 @@ export async function createLeadFromPayload(body: CreateLeadInput) {
     subId,
     publisherId,
     cost,
+    clickId,
   } = body;
 
   if (!campaignId) {
@@ -401,6 +403,41 @@ export async function createLeadFromPayload(body: CreateLeadInput) {
     }
   }
 
+  let matchedClick: {
+    clickId: string;
+    organizationId: string;
+    trackingCampaignId: string | null;
+    trackingLinkId: string | null;
+    trafficSource: string | null;
+    publisherId: string | null;
+    subId: string | null;
+  } | null = null;
+
+  if (clickId) {
+    const foundClick = await db.clickEvent.findUnique({
+      where: { clickId },
+      select: {
+        clickId: true,
+        organizationId: true,
+        trackingCampaignId: true,
+        trackingLinkId: true,
+        trafficSource: true,
+        publisherId: true,
+        subId: true,
+      },
+    });
+
+    if (foundClick && foundClick.organizationId === campaign.organizationId) {
+      matchedClick = foundClick;
+    }
+  }
+
+  const resolvedSource = source ?? matchedClick?.trafficSource ?? null;
+  const resolvedSubId = subId ?? matchedClick?.subId ?? null;
+  const resolvedPublisherId = publisherId ?? matchedClick?.publisherId ?? null;
+  const resolvedTrackingCampaignId = matchedClick?.trackingCampaignId ?? null;
+  const resolvedTrackingLinkId = matchedClick?.trackingLinkId ?? null;
+
   const activeBuyers = campaign.buyerLinks
     .map((link) => link.buyer)
     .filter((buyer) => buyer.status === "active");
@@ -417,9 +454,9 @@ export async function createLeadFromPayload(body: CreateLeadInput) {
         pingBuyer(buyer, {
           zip,
           state,
-          source,
-          subId,
-          publisherId,
+          source: resolvedSource,
+          subId: resolvedSubId,
+          publisherId: resolvedPublisherId,
         })
       )
     );
@@ -468,13 +505,16 @@ export async function createLeadFromPayload(body: CreateLeadInput) {
       phone,
       state,
       zip,
-      source,
-      subId,
-      publisherId,
+      source: resolvedSource,
+      subId: resolvedSubId,
+      publisherId: resolvedPublisherId,
       cost: numericCost,
       profit,
       marginPct,
       routingStatus,
+      clickId: matchedClick?.clickId ?? clickId ?? null,
+      trackingLinkId: resolvedTrackingLinkId,
+      trackingCampaignId: resolvedTrackingCampaignId,
     },
     include: {
       campaign: true,
@@ -540,6 +580,8 @@ export async function createLeadFromPayload(body: CreateLeadInput) {
       campaign: true,
       assignedBuyer: true,
       supplier: true,
+      trackingCampaign: true,
+      trackingLink: true,
       deliveries: {
         orderBy: { createdAt: "desc" },
       },
