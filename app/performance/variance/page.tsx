@@ -40,7 +40,11 @@ function signedNumber(value: number) {
 }
 
 function signedCurrency(value: number) {
-  return value > 0 ? `+$${value.toFixed(2)}` : `-$${Math.abs(value).toFixed(2)}`;
+  return value > 0
+    ? `+$${value.toFixed(2)}`
+    : value < 0
+      ? `-$${Math.abs(value).toFixed(2)}`
+      : `$0.00`;
 }
 
 function signedPercent(value: number | null) {
@@ -159,6 +163,16 @@ function deltaClass(value: number | null) {
 function deltaLeadsClass(value: number) {
   if (value === 0) return "text-gray-700";
   return value > 0 ? "text-green-700" : "text-red-700";
+}
+
+function costDeltaClass(value: number) {
+  if (value === 0) return "text-gray-700";
+  return value > 0 ? "text-red-700" : "text-green-700";
+}
+
+function costDeltaPctClass(value: number | null) {
+  if (value === null || value === 0) return "text-gray-700";
+  return value > 0 ? "text-red-700" : "text-green-700";
 }
 
 function buildVarianceRows(
@@ -303,17 +317,13 @@ export default async function PerformanceVariancePage({
 
   const groupBy: GroupByOption = params.groupBy || "subId";
 
-  const {
-    periodAFrom,
-    periodATo,
-    periodBFrom,
-    periodBTo,
-  } = buildComparisonDefaults(
-    params.periodAFrom,
-    params.periodATo,
-    params.periodBFrom,
-    params.periodBTo
-  );
+  const { periodAFrom, periodATo, periodBFrom, periodBTo } =
+    buildComparisonDefaults(
+      params.periodAFrom,
+      params.periodATo,
+      params.periodBFrom,
+      params.periodBTo
+    );
 
   const periodABounds = getDateBounds(periodAFrom, periodATo);
   const periodBBounds = getDateBounds(periodBFrom, periodBTo);
@@ -613,10 +623,10 @@ export default async function PerformanceVariancePage({
 
                     <td className="px-6 py-4">{currency(row.periodACost)}</td>
                     <td className="px-6 py-4">{currency(row.periodBCost)}</td>
-                    <td className={`px-6 py-4 font-medium ${deltaClass(-row.deltaCost) === "text-green-700" ? "text-red-700" : deltaClass(-row.deltaCost) === "text-red-700" ? "text-green-700" : "text-gray-700"}`}>
+                    <td className={`px-6 py-4 font-medium ${costDeltaClass(row.deltaCost)}`}>
                       {signedCurrency(row.deltaCost)}
                     </td>
-                    <td className={`px-6 py-4 font-medium ${deltaClass(-row.deltaCostPct) === "text-green-700" ? "text-red-700" : deltaClass(-row.deltaCostPct) === "text-red-700" ? "text-green-700" : "text-gray-700"}`}>
+                    <td className={`px-6 py-4 font-medium ${costDeltaPctClass(row.deltaCostPct)}`}>
                       {signedPercent(row.deltaCostPct)}
                     </td>
 
