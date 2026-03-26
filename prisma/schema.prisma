@@ -12,12 +12,15 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  buyers    Buyer[]
-  campaigns Campaign[]
-  leads     Lead[]
-  suppliers Supplier[]
-  users     User[]
-  invites   Invite[]
+  buyers            Buyer[]
+  campaigns         Campaign[]
+  leads             Lead[]
+  suppliers         Supplier[]
+  users             User[]
+  invites           Invite[]
+  trackingCampaigns TrackingCampaign[]
+  trackingLinks     TrackingLink[]
+  clickEvents       ClickEvent[]
 }
 
 model User {
@@ -31,6 +34,8 @@ model User {
   updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
 }
 
 model Invite {
@@ -48,6 +53,7 @@ model Invite {
   organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
+  @@index([email])
 }
 
 model Buyer {
@@ -77,11 +83,13 @@ model Buyer {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  organization    Organization    @relation(fields: [organizationId], references: [id])
-  campaignLinks   CampaignBuyer[]
-  assignedLeads   Lead[]
-  deliveries      Delivery[]
-  pingResults     PingResult[]
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  campaignLinks CampaignBuyer[]
+  assignedLeads Lead[]
+  deliveries    Delivery[]
+  pingResults   PingResult[]
+
+  @@index([organizationId])
 }
 
 model Supplier {
@@ -102,6 +110,8 @@ model Supplier {
 
   organization Organization @relation(fields: [organizationId], references: [id])
   leads        Lead[]
+
+  @@index([organizationId])
 }
 
 model Campaign {
@@ -118,6 +128,8 @@ model Campaign {
   organization Organization    @relation(fields: [organizationId], references: [id])
   buyerLinks   CampaignBuyer[]
   leads        Lead[]
+
+  @@index([organizationId])
 }
 
 model CampaignBuyer {
@@ -131,6 +143,8 @@ model CampaignBuyer {
   buyer    Buyer    @relation(fields: [buyerId], references: [id])
 
   @@unique([campaignId, buyerId])
+  @@index([campaignId])
+  @@index([buyerId])
 }
 
 model Lead {
@@ -139,28 +153,52 @@ model Lead {
   campaignId      String
   assignedBuyerId String?
   supplierId      String?
+
   firstName       String?
   lastName        String?
   email           String?
   phone           String?
   state           String?
   zip             String?
+
   source          String?
   subId           String?
   publisherId     String?
+
   cost            Decimal? @db.Decimal(10, 2)
   profit          Decimal? @db.Decimal(10, 2)
   marginPct       Decimal? @db.Decimal(10, 2)
+
   routingStatus   String   @default("pending")
+
+  clickId         String?
+  trackingLinkId  String?
+  trackingCampaignId String?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  organization  Organization @relation(fields: [organizationId], references: [id])
-  campaign      Campaign     @relation(fields: [campaignId], references: [id])
-  assignedBuyer Buyer?       @relation(fields: [assignedBuyerId], references: [id])
-  supplier      Supplier?    @relation(fields: [supplierId], references: [id])
-  deliveries    Delivery[]
-  pingResults   PingResult[]
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  campaign         Campaign          @relation(fields: [campaignId], references: [id])
+  assignedBuyer    Buyer?            @relation(fields: [assignedBuyerId], references: [id])
+  supplier         Supplier?         @relation(fields: [supplierId], references: [id])
+  trackingLink     TrackingLink?     @relation(fields: [trackingLinkId], references: [id])
+  trackingCampaign TrackingCampaign? @relation(fields: [trackingCampaignId], references: [id])
+
+  deliveries     Delivery[]
+  pingResults    PingResult[]
+
+  @@index([organizationId])
+  @@index([campaignId])
+  @@index([assignedBuyerId])
+  @@index([supplierId])
+  @@index([subId])
+  @@index([publisherId])
+  @@index([source])
+  @@index([clickId])
+  @@index([trackingLinkId])
+  @@index([trackingCampaignId])
+  @@index([createdAt])
 }
 
 model Delivery {
@@ -175,6 +213,10 @@ model Delivery {
 
   lead  Lead  @relation(fields: [leadId], references: [id])
   buyer Buyer @relation(fields: [buyerId], references: [id])
+
+  @@index([leadId])
+  @@index([buyerId])
+  @@index([createdAt])
 }
 
 model PingResult {
@@ -190,4 +232,100 @@ model PingResult {
 
   lead  Lead  @relation(fields: [leadId], references: [id])
   buyer Buyer @relation(fields: [buyerId], references: [id])
+
+  @@index([leadId])
+  @@index([buyerId])
+  @@index([createdAt])
+}
+
+model TrackingCampaign {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  slug           String   @unique
+  destinationUrl String
+  status         String   @default("active")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  links        TrackingLink[]
+  clicks       ClickEvent[]
+  leads        Lead[]
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model TrackingLink {
+  id                 String   @id @default(uuid())
+  organizationId     String
+  trackingCampaignId String
+  name               String
+  slug               String   @unique
+
+  trafficSource      String?
+  publisherId        String?
+  subId              String?
+  subId2             String?
+  subId3             String?
+
+  costModel          String   @default("cpc")
+  costPerClick       Decimal? @db.Decimal(10, 4)
+
+  destinationUrl     String?
+  status             String   @default("active")
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organization     Organization     @relation(fields: [organizationId], references: [id])
+  trackingCampaign TrackingCampaign @relation(fields: [trackingCampaignId], references: [id])
+  clicks           ClickEvent[]
+  leads            Lead[]
+
+  @@index([organizationId])
+  @@index([trackingCampaignId])
+  @@index([trafficSource])
+  @@index([publisherId])
+  @@index([subId])
+  @@index([status])
+}
+
+model ClickEvent {
+  id                 String   @id @default(uuid())
+  organizationId     String
+  trackingCampaignId String?
+  trackingLinkId     String?
+
+  clickId            String   @unique
+
+  trafficSource      String?
+  publisherId        String?
+  subId              String?
+  subId2             String?
+  subId3             String?
+
+  cost               Decimal? @db.Decimal(10, 4)
+  destinationUrl     String?
+
+  ipAddress          String?
+  userAgent          String?
+  referer            String?
+  queryString        String?
+
+  createdAt          DateTime @default(now())
+
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  trackingCampaign TrackingCampaign? @relation(fields: [trackingCampaignId], references: [id])
+  trackingLink     TrackingLink?     @relation(fields: [trackingLinkId], references: [id])
+
+  @@index([organizationId])
+  @@index([trackingCampaignId])
+  @@index([trackingLinkId])
+  @@index([trafficSource])
+  @@index([publisherId])
+  @@index([subId])
+  @@index([createdAt])
 }
