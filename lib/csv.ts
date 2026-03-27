@@ -11,10 +11,7 @@ export function csvEscape(value: unknown) {
   return stringValue;
 }
 
-export function toCsv(
-  headers: string[],
-  rows: Array<Array<unknown>>
-) {
+export function toCsv(headers: string[], rows: Array<Array<unknown>>) {
   const lines = [
     headers.map(csvEscape).join(","),
     ...rows.map((row) => row.map(csvEscape).join(",")),
