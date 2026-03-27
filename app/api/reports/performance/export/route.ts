@@ -1,9 +1,5 @@
 import { db } from "@/lib/db";
-import { csvResponse, toCsv } from "@/lib/csv";
-import {
-  getRequestSessionUser,
-  isPlatformAdmin,
-} from "@/lib/request-session-user";
+import { isPlatformAdmin, getCurrentUser } from "@/lib/session-user";
 
 type GroupByOption = "campaign" | "buyer" | "supplier" | "source" | "subId";
 
@@ -45,11 +41,39 @@ function getGroupValue(groupBy: GroupByOption, lead: any) {
   return lead.subId || "unknown";
 }
 
+function escapeCsvCell(value: unknown) {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+
+  if (str.includes('"') || str.includes(",") || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  return str;
+}
+
+function toCsv(headers: string[], rows: (string | number)[][]) {
+  const headerLine = headers.map(escapeCsvCell).join(",");
+  const dataLines = rows.map((row) => row.map(escapeCsvCell).join(","));
+  return [headerLine, ...dataLines].join("\n");
+}
+
+function csvResponse(filename: string, csv: string) {
+  return new Response(csv, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 export async function GET(req: Request) {
   try {
-    const sessionUser = await getRequestSessionUser(req);
+    const user = await getCurrentUser();
 
-    if (!sessionUser) {
+    if (!user) {
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -64,20 +88,16 @@ export async function GET(req: Request) {
     const where =
       startDate || endDate
         ? {
-            ...(isPlatformAdmin(sessionUser)
-              ? {}
-              : { organizationId: sessionUser.organizationId }),
-            routingStatus: "assigned",
+            ...(isPlatformAdmin(user) ? {} : { organizationId: user.organizationId }),
+            routingStatus: "assigned" as const,
             createdAt: {
               ...(startDate ? { gte: startDate } : {}),
               ...(endDate ? { lte: endDate } : {}),
             },
           }
         : {
-            ...(isPlatformAdmin(sessionUser)
-              ? {}
-              : { organizationId: sessionUser.organizationId }),
-            routingStatus: "assigned",
+            ...(isPlatformAdmin(user) ? {} : { organizationId: user.organizationId }),
+            routingStatus: "assigned" as const,
           };
 
     const leads = await db.lead.findMany({
