@@ -335,9 +335,17 @@ export default async function TrackingReportsPage({
   const maxGraphValue =
     daily.length > 0
       ? Math.max(
-          ...daily.flatMap((d) => [d.clicks, d.conversions, d.spend, d.profit].map((v) => Math.abs(v)))
+          ...daily.flatMap((d) =>
+            [d.clicks, d.conversions, d.spend, d.profit].map((v) => Math.abs(v))
+          )
         )
       : 0;
+
+  const exportHref = `/api/reports/tracking/export?range=${encodeURIComponent(
+    range
+  )}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(
+    to
+  )}&groupBy=${encodeURIComponent(groupBy)}&q=${encodeURIComponent(q || "")}`;
 
   return (
     <div className="space-y-6">
@@ -462,6 +470,13 @@ export default async function TrackingReportsPage({
               >
                 Run Report
               </button>
+
+              <Link
+                href={exportHref}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Export CSV
+              </Link>
 
               <Link
                 href="/tracking/reports"

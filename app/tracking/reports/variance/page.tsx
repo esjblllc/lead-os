@@ -2,26 +2,33 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireCurrentUser, isPlatformAdmin } from "@/lib/session-user";
 
-type GroupByOption = "campaign" | "link" | "source" | "publisher" | "subId";
+type GroupByOption = "campaign" | "buyer" | "supplier" | "source" | "subId";
 
 type VarianceRow = {
   key: string;
-  periodAClicks: number;
-  periodASpend: number;
-  periodAAvgCpc: number | null;
-  periodBClicks: number;
-  periodBSpend: number;
-  periodBAvgCpc: number | null;
-  deltaClicks: number;
-  deltaSpend: number;
-  deltaAvgCpc: number | null;
-  deltaClicksPct: number | null;
-  deltaSpendPct: number | null;
-  deltaAvgCpcPct: number | null;
+  periodALeads: number;
+  periodARevenue: number;
+  periodACost: number;
+  periodAProfit: number;
+  periodAMarginPct: number | null;
+  periodBLeads: number;
+  periodBRevenue: number;
+  periodBCost: number;
+  periodBProfit: number;
+  periodBMarginPct: number | null;
+  deltaLeads: number;
+  deltaRevenue: number;
+  deltaCost: number;
+  deltaProfit: number;
+  deltaMarginPct: number | null;
+  deltaLeadsPct: number | null;
+  deltaRevenuePct: number | null;
+  deltaCostPct: number | null;
+  deltaProfitPct: number | null;
 };
 
 function currency(value: number) {
-  return `$${value.toFixed(4)}`;
+  return `$${value.toFixed(2)}`;
 }
 
 function percent(value: number | null) {
@@ -34,10 +41,10 @@ function signedNumber(value: number) {
 
 function signedCurrency(value: number) {
   return value > 0
-    ? `+$${value.toFixed(4)}`
+    ? `+$${value.toFixed(2)}`
     : value < 0
-      ? `-$${Math.abs(value).toFixed(4)}`
-      : `$0.0000`;
+      ? `-$${Math.abs(value).toFixed(2)}`
+      : `$0.00`;
 }
 
 function signedPercent(value: number | null) {
@@ -51,13 +58,6 @@ function toNumber(value: unknown) {
   return Number.isNaN(n) ? 0 : n;
 }
 
-function formatDateInput(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function getDefaultPeriodA() {
   const today = new Date();
   const from = new Date(today);
@@ -67,6 +67,13 @@ function getDefaultPeriodA() {
     from: formatDateInput(from),
     to: formatDateInput(today),
   };
+}
+
+function formatDateInput(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function getDateBounds(from?: string, to?: string) {
@@ -121,6 +128,22 @@ function buildComparisonDefaults(
   };
 }
 
+function getGroupLabel(groupBy: GroupByOption) {
+  if (groupBy === "campaign") return "Campaign";
+  if (groupBy === "buyer") return "Buyer";
+  if (groupBy === "supplier") return "Supplier";
+  if (groupBy === "source") return "Source";
+  return "Sub ID";
+}
+
+function getGroupValue(groupBy: GroupByOption, lead: any) {
+  if (groupBy === "campaign") return lead.campaign?.name || "unknown";
+  if (groupBy === "buyer") return lead.assignedBuyer?.name || "unassigned";
+  if (groupBy === "supplier") return lead.supplier?.name || "unknown";
+  if (groupBy === "source") return lead.source || "unknown";
+  return lead.subId || "unknown";
+}
+
 function pctChange(current: number, prior: number) {
   if (prior === 0) {
     return current === 0 ? 0 : null;
@@ -128,21 +151,8 @@ function pctChange(current: number, prior: number) {
   return ((current - prior) / Math.abs(prior)) * 100;
 }
 
-function getGroupLabel(groupBy: GroupByOption) {
-  if (groupBy === "campaign") return "Campaign";
-  if (groupBy === "link") return "Tracking Link";
-  if (groupBy === "source") return "Traffic Source";
-  if (groupBy === "publisher") return "Publisher";
-  return "Sub ID";
-}
-
-function getGroupValue(groupBy: GroupByOption, click: any) {
-  if (groupBy === "campaign") return click.trackingCampaign?.name || "unknown";
-  if (groupBy === "link")
-    return click.trackingLink?.name || click.trackingLink?.slug || "unknown";
-  if (groupBy === "source") return click.trafficSource || "unknown";
-  if (groupBy === "publisher") return click.publisherId || "unknown";
-  return click.subId || "unknown";
+function marginPct(revenue: number, profit: number) {
+  return revenue > 0 ? (profit / revenue) * 100 : null;
 }
 
 function deltaClass(value: number | null) {
@@ -150,101 +160,125 @@ function deltaClass(value: number | null) {
   return value > 0 ? "text-green-700" : "text-red-700";
 }
 
-function clicksDeltaClass(value: number) {
+function deltaLeadsClass(value: number) {
   if (value === 0) return "text-gray-700";
   return value > 0 ? "text-green-700" : "text-red-700";
 }
 
-function spendDeltaClass(value: number) {
+function costDeltaClass(value: number) {
   if (value === 0) return "text-gray-700";
   return value > 0 ? "text-red-700" : "text-green-700";
 }
 
-function spendDeltaPctClass(value: number | null) {
+function costDeltaPctClass(value: number | null) {
   if (value === null || value === 0) return "text-gray-700";
   return value > 0 ? "text-red-700" : "text-green-700";
 }
 
-function avgCpc(clicks: number, spend: number) {
-  return clicks > 0 ? spend / clicks : null;
-}
-
 function buildVarianceRows(
   groupBy: GroupByOption,
-  periodAClicks: any[],
-  periodBClicks: any[]
+  periodALeads: any[],
+  periodBLeads: any[]
 ): VarianceRow[] {
   const map = new Map<
     string,
     {
       key: string;
-      periodAClicks: number;
-      periodASpend: number;
-      periodBClicks: number;
-      periodBSpend: number;
+      periodALeads: number;
+      periodARevenue: number;
+      periodACost: number;
+      periodAProfit: number;
+      periodBLeads: number;
+      periodBRevenue: number;
+      periodBCost: number;
+      periodBProfit: number;
     }
   >();
 
-  for (const click of periodAClicks) {
-    const key = getGroupValue(groupBy, click);
+  for (const lead of periodALeads) {
+    const key = getGroupValue(groupBy, lead);
     const existing = map.get(key) || {
       key,
-      periodAClicks: 0,
-      periodASpend: 0,
-      periodBClicks: 0,
-      periodBSpend: 0,
+      periodALeads: 0,
+      periodARevenue: 0,
+      periodACost: 0,
+      periodAProfit: 0,
+      periodBLeads: 0,
+      periodBRevenue: 0,
+      periodBCost: 0,
+      periodBProfit: 0,
     };
 
-    existing.periodAClicks += 1;
-    existing.periodASpend += toNumber(click.cost);
+    const cost = toNumber(lead.cost);
+    const profit = toNumber(lead.profit);
+    const revenue = cost + profit;
+
+    existing.periodALeads += 1;
+    existing.periodARevenue += revenue;
+    existing.periodACost += cost;
+    existing.periodAProfit += profit;
 
     map.set(key, existing);
   }
 
-  for (const click of periodBClicks) {
-    const key = getGroupValue(groupBy, click);
+  for (const lead of periodBLeads) {
+    const key = getGroupValue(groupBy, lead);
     const existing = map.get(key) || {
       key,
-      periodAClicks: 0,
-      periodASpend: 0,
-      periodBClicks: 0,
-      periodBSpend: 0,
+      periodALeads: 0,
+      periodARevenue: 0,
+      periodACost: 0,
+      periodAProfit: 0,
+      periodBLeads: 0,
+      periodBRevenue: 0,
+      periodBCost: 0,
+      periodBProfit: 0,
     };
 
-    existing.periodBClicks += 1;
-    existing.periodBSpend += toNumber(click.cost);
+    const cost = toNumber(lead.cost);
+    const profit = toNumber(lead.profit);
+    const revenue = cost + profit;
+
+    existing.periodBLeads += 1;
+    existing.periodBRevenue += revenue;
+    existing.periodBCost += cost;
+    existing.periodBProfit += profit;
 
     map.set(key, existing);
   }
 
   return Array.from(map.values())
     .map((row) => {
-      const periodAAvgCpc = avgCpc(row.periodAClicks, row.periodASpend);
-      const periodBAvgCpc = avgCpc(row.periodBClicks, row.periodBSpend);
+      const periodAMarginPct = marginPct(row.periodARevenue, row.periodAProfit);
+      const periodBMarginPct = marginPct(row.periodBRevenue, row.periodBProfit);
 
       return {
         key: row.key,
-        periodAClicks: row.periodAClicks,
-        periodASpend: row.periodASpend,
-        periodAAvgCpc,
-        periodBClicks: row.periodBClicks,
-        periodBSpend: row.periodBSpend,
-        periodBAvgCpc,
-        deltaClicks: row.periodAClicks - row.periodBClicks,
-        deltaSpend: row.periodASpend - row.periodBSpend,
-        deltaAvgCpc:
-          periodAAvgCpc === null || periodBAvgCpc === null
+        periodALeads: row.periodALeads,
+        periodARevenue: row.periodARevenue,
+        periodACost: row.periodACost,
+        periodAProfit: row.periodAProfit,
+        periodAMarginPct,
+        periodBLeads: row.periodBLeads,
+        periodBRevenue: row.periodBRevenue,
+        periodBCost: row.periodBCost,
+        periodBProfit: row.periodBProfit,
+        periodBMarginPct,
+        deltaLeads: row.periodALeads - row.periodBLeads,
+        deltaRevenue: row.periodARevenue - row.periodBRevenue,
+        deltaCost: row.periodACost - row.periodBCost,
+        deltaProfit: row.periodAProfit - row.periodBProfit,
+        deltaMarginPct:
+          periodAMarginPct === null || periodBMarginPct === null
             ? null
-            : periodAAvgCpc - periodBAvgCpc,
-        deltaClicksPct: pctChange(row.periodAClicks, row.periodBClicks),
-        deltaSpendPct: pctChange(row.periodASpend, row.periodBSpend),
-        deltaAvgCpcPct:
-          periodAAvgCpc === null || periodBAvgCpc === null
-            ? null
-            : pctChange(periodAAvgCpc, periodBAvgCpc),
+            : periodAMarginPct - periodBMarginPct,
+        deltaLeadsPct: pctChange(row.periodALeads, row.periodBLeads),
+        deltaRevenuePct: pctChange(row.periodARevenue, row.periodBRevenue),
+        deltaCostPct: pctChange(row.periodACost, row.periodBCost),
+        deltaProfitPct: pctChange(row.periodAProfit, row.periodBProfit),
       };
     })
-    .sort((a, b) => Math.abs(b.deltaSpend) - Math.abs(a.deltaSpend));
+    .sort((a, b) => Math.abs(b.deltaProfit) - Math.abs(a.deltaProfit));
 }
 
 function SummaryCard({
@@ -267,7 +301,7 @@ function SummaryCard({
   );
 }
 
-export default async function TrackingVariancePage({
+export default async function ReportsVariancePage({
   searchParams,
 }: {
   searchParams?: Promise<{
@@ -298,69 +332,92 @@ export default async function TrackingVariancePage({
     ? {}
     : { organizationId: user.organizationId };
 
-  const [periodAClicks, periodBClicks] = await Promise.all([
-    db.clickEvent.findMany({
+  const [periodALeads, periodBLeads] = await Promise.all([
+    db.lead.findMany({
       where: {
         ...orgWhere,
+        routingStatus: "assigned",
         createdAt: {
           ...(periodABounds.startDate ? { gte: periodABounds.startDate } : {}),
           ...(periodABounds.endDate ? { lte: periodABounds.endDate } : {}),
         },
       },
       include: {
-        trackingCampaign: true,
-        trackingLink: true,
+        campaign: true,
+        assignedBuyer: true,
+        supplier: true,
       },
     }),
-    db.clickEvent.findMany({
+    db.lead.findMany({
       where: {
         ...orgWhere,
+        routingStatus: "assigned",
         createdAt: {
           ...(periodBBounds.startDate ? { gte: periodBBounds.startDate } : {}),
           ...(periodBBounds.endDate ? { lte: periodBBounds.endDate } : {}),
         },
       },
       include: {
-        trackingCampaign: true,
-        trackingLink: true,
+        campaign: true,
+        assignedBuyer: true,
+        supplier: true,
       },
     }),
   ]);
 
-  const rows = buildVarianceRows(groupBy, periodAClicks, periodBClicks);
+  const rows = buildVarianceRows(groupBy, periodALeads, periodBLeads);
 
   const totals = rows.reduce(
     (acc, row) => {
-      acc.periodAClicks += row.periodAClicks;
-      acc.periodASpend += row.periodASpend;
-      acc.periodBClicks += row.periodBClicks;
-      acc.periodBSpend += row.periodBSpend;
+      acc.periodALeads += row.periodALeads;
+      acc.periodARevenue += row.periodARevenue;
+      acc.periodACost += row.periodACost;
+      acc.periodAProfit += row.periodAProfit;
+      acc.periodBLeads += row.periodBLeads;
+      acc.periodBRevenue += row.periodBRevenue;
+      acc.periodBCost += row.periodBCost;
+      acc.periodBProfit += row.periodBProfit;
       return acc;
     },
     {
-      periodAClicks: 0,
-      periodASpend: 0,
-      periodBClicks: 0,
-      periodBSpend: 0,
+      periodALeads: 0,
+      periodARevenue: 0,
+      periodACost: 0,
+      periodAProfit: 0,
+      periodBLeads: 0,
+      periodBRevenue: 0,
+      periodBCost: 0,
+      periodBProfit: 0,
     }
   );
 
-  const totalPeriodAAvgCpc = avgCpc(totals.periodAClicks, totals.periodASpend);
-  const totalPeriodBAvgCpc = avgCpc(totals.periodBClicks, totals.periodBSpend);
+  const totalPeriodAMarginPct = marginPct(totals.periodARevenue, totals.periodAProfit);
+  const totalPeriodBMarginPct = marginPct(totals.periodBRevenue, totals.periodBProfit);
 
-  const totalDeltaClicks = totals.periodAClicks - totals.periodBClicks;
-  const totalDeltaSpend = totals.periodASpend - totals.periodBSpend;
-  const totalDeltaAvgCpc =
-    totalPeriodAAvgCpc === null || totalPeriodBAvgCpc === null
-      ? null
-      : totalPeriodAAvgCpc - totalPeriodBAvgCpc;
+  const totalDeltaLeads = totals.periodALeads - totals.periodBLeads;
+  const totalDeltaRevenue = totals.periodARevenue - totals.periodBRevenue;
+  const totalDeltaCost = totals.periodACost - totals.periodBCost;
+  const totalDeltaProfit = totals.periodAProfit - totals.periodBProfit;
 
-  const totalDeltaClicksPct = pctChange(totals.periodAClicks, totals.periodBClicks);
-  const totalDeltaSpendPct = pctChange(totals.periodASpend, totals.periodBSpend);
-  const totalDeltaAvgCpcPct =
-    totalPeriodAAvgCpc === null || totalPeriodBAvgCpc === null
+  const totalDeltaLeadsPct = pctChange(totals.periodALeads, totals.periodBLeads);
+  const totalDeltaRevenuePct = pctChange(totals.periodARevenue, totals.periodBRevenue);
+  const totalDeltaCostPct = pctChange(totals.periodACost, totals.periodBCost);
+  const totalDeltaProfitPct = pctChange(totals.periodAProfit, totals.periodBProfit);
+
+  const totalDeltaMarginPct =
+    totalPeriodAMarginPct === null || totalPeriodBMarginPct === null
       ? null
-      : pctChange(totalPeriodAAvgCpc, totalPeriodBAvgCpc);
+      : totalPeriodAMarginPct - totalPeriodBMarginPct;
+
+  const exportHref = `/api/reports/performance-variance/export?periodAFrom=${encodeURIComponent(
+    periodAFrom
+  )}&periodATo=${encodeURIComponent(
+    periodATo
+  )}&periodBFrom=${encodeURIComponent(
+    periodBFrom
+  )}&periodBTo=${encodeURIComponent(
+    periodBTo
+  )}&groupBy=${encodeURIComponent(groupBy)}`;
 
   return (
     <div className="space-y-6">
@@ -369,22 +426,22 @@ export default async function TrackingVariancePage({
           <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">
-                Link Tracking Suite
+                Reports
               </div>
               <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-900">
-                Tracking Variance
+                Variance Reporting
               </h1>
               <p className="mt-2 text-sm text-gray-500">
-                Compare two time periods by {getGroupLabel(groupBy).toLowerCase()} and identify click, spend, and CPC shifts.
+                Compare two time periods by {getGroupLabel(groupBy).toLowerCase()} and identify volume, revenue, cost, profit, and margin changes.
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/tracking/reports"
+                href="/reports"
                 className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
               >
-                Standard Tracking Reports
+                Standard Reports
               </Link>
             </div>
           </div>
@@ -448,10 +505,10 @@ export default async function TrackingVariancePage({
                 className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
               >
                 <option value="subId">Sub ID</option>
-                <option value="source">Traffic Source</option>
+                <option value="source">Source</option>
                 <option value="campaign">Campaign</option>
-                <option value="link">Tracking Link</option>
-                <option value="publisher">Publisher</option>
+                <option value="buyer">Buyer</option>
+                <option value="supplier">Supplier</option>
               </select>
             </div>
 
@@ -464,7 +521,14 @@ export default async function TrackingVariancePage({
               </button>
 
               <Link
-                href="/tracking/reports/variance"
+                href={exportHref}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Export CSV
+              </Link>
+
+              <Link
+                href="/reports/variance"
                 className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
               >
                 Reset
@@ -475,29 +539,29 @@ export default async function TrackingVariancePage({
 
         <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-5">
           <SummaryCard
-            label="Period A Spend"
-            value={currency(totals.periodASpend)}
+            label="Period A Profit"
+            value={currency(totals.periodAProfit)}
             subValue={`${periodAFrom} → ${periodATo}`}
           />
           <SummaryCard
-            label="Period B Spend"
-            value={currency(totals.periodBSpend)}
+            label="Period B Profit"
+            value={currency(totals.periodBProfit)}
             subValue={`${periodBFrom} → ${periodBTo}`}
           />
           <SummaryCard
-            label="Spend Delta"
-            value={signedCurrency(totalDeltaSpend)}
-            subValue={signedPercent(totalDeltaSpendPct)}
+            label="Profit Delta"
+            value={signedCurrency(totalDeltaProfit)}
+            subValue={signedPercent(totalDeltaProfitPct)}
           />
           <SummaryCard
-            label="Click Delta"
-            value={signedNumber(totalDeltaClicks)}
-            subValue={signedPercent(totalDeltaClicksPct)}
+            label="Lead Delta"
+            value={signedNumber(totalDeltaLeads)}
+            subValue={signedPercent(totalDeltaLeadsPct)}
           />
           <SummaryCard
-            label="Avg CPC Delta"
-            value={signedCurrency(totalDeltaAvgCpc ?? 0)}
-            subValue={signedPercent(totalDeltaAvgCpcPct)}
+            label="Margin Delta"
+            value={signedPercent(totalDeltaMarginPct)}
+            subValue={`${percent(totalPeriodAMarginPct)} vs ${percent(totalPeriodBMarginPct)}`}
           />
         </div>
       </div>
@@ -510,25 +574,34 @@ export default async function TrackingVariancePage({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-[1400px] w-full text-sm">
+          <table className="min-w-[1800px] w-full text-sm">
             <thead className="bg-gray-50 text-left text-gray-500">
               <tr>
                 <th className="px-6 py-3 font-medium">{getGroupLabel(groupBy)}</th>
 
-                <th className="px-6 py-3 font-medium">Clicks A</th>
-                <th className="px-6 py-3 font-medium">Clicks B</th>
-                <th className="px-6 py-3 font-medium">Δ Clicks</th>
-                <th className="px-6 py-3 font-medium">% Δ Clicks</th>
+                <th className="px-6 py-3 font-medium">Leads A</th>
+                <th className="px-6 py-3 font-medium">Leads B</th>
+                <th className="px-6 py-3 font-medium">Δ Leads</th>
+                <th className="px-6 py-3 font-medium">% Δ Leads</th>
 
-                <th className="px-6 py-3 font-medium">Spend A</th>
-                <th className="px-6 py-3 font-medium">Spend B</th>
-                <th className="px-6 py-3 font-medium">Δ Spend</th>
-                <th className="px-6 py-3 font-medium">% Δ Spend</th>
+                <th className="px-6 py-3 font-medium">Revenue A</th>
+                <th className="px-6 py-3 font-medium">Revenue B</th>
+                <th className="px-6 py-3 font-medium">Δ Revenue</th>
+                <th className="px-6 py-3 font-medium">% Δ Revenue</th>
 
-                <th className="px-6 py-3 font-medium">Avg CPC A</th>
-                <th className="px-6 py-3 font-medium">Avg CPC B</th>
-                <th className="px-6 py-3 font-medium">Δ Avg CPC</th>
-                <th className="px-6 py-3 font-medium">% Δ Avg CPC</th>
+                <th className="px-6 py-3 font-medium">Cost A</th>
+                <th className="px-6 py-3 font-medium">Cost B</th>
+                <th className="px-6 py-3 font-medium">Δ Cost</th>
+                <th className="px-6 py-3 font-medium">% Δ Cost</th>
+
+                <th className="px-6 py-3 font-medium">Profit A</th>
+                <th className="px-6 py-3 font-medium">Profit B</th>
+                <th className="px-6 py-3 font-medium">Δ Profit</th>
+                <th className="px-6 py-3 font-medium">% Δ Profit</th>
+
+                <th className="px-6 py-3 font-medium">Margin A</th>
+                <th className="px-6 py-3 font-medium">Margin B</th>
+                <th className="px-6 py-3 font-medium">Δ Margin</th>
               </tr>
             </thead>
 
@@ -536,10 +609,10 @@ export default async function TrackingVariancePage({
               {rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={13}
+                    colSpan={20}
                     className="px-6 py-12 text-center text-sm text-gray-500"
                   >
-                    No click data found for the selected comparison periods.
+                    No lead data found for the selected comparison periods.
                   </td>
                 </tr>
               ) : (
@@ -547,35 +620,46 @@ export default async function TrackingVariancePage({
                   <tr key={row.key} className="border-t border-gray-100 hover:bg-gray-50">
                     <td className="px-6 py-4 font-medium text-gray-900">{row.key}</td>
 
-                    <td className="px-6 py-4">{row.periodAClicks}</td>
-                    <td className="px-6 py-4">{row.periodBClicks}</td>
-                    <td className={`px-6 py-4 font-medium ${clicksDeltaClass(row.deltaClicks)}`}>
-                      {signedNumber(row.deltaClicks)}
+                    <td className="px-6 py-4">{row.periodALeads}</td>
+                    <td className="px-6 py-4">{row.periodBLeads}</td>
+                    <td className={`px-6 py-4 font-medium ${deltaLeadsClass(row.deltaLeads)}`}>
+                      {signedNumber(row.deltaLeads)}
                     </td>
-                    <td className={`px-6 py-4 font-medium ${deltaClass(row.deltaClicksPct)}`}>
-                      {signedPercent(row.deltaClicksPct)}
-                    </td>
-
-                    <td className="px-6 py-4">{currency(row.periodASpend)}</td>
-                    <td className="px-6 py-4">{currency(row.periodBSpend)}</td>
-                    <td className={`px-6 py-4 font-medium ${spendDeltaClass(row.deltaSpend)}`}>
-                      {signedCurrency(row.deltaSpend)}
-                    </td>
-                    <td className={`px-6 py-4 font-medium ${spendDeltaPctClass(row.deltaSpendPct)}`}>
-                      {signedPercent(row.deltaSpendPct)}
+                    <td className={`px-6 py-4 font-medium ${deltaClass(row.deltaLeadsPct)}`}>
+                      {signedPercent(row.deltaLeadsPct)}
                     </td>
 
-                    <td className="px-6 py-4">
-                      {row.periodAAvgCpc === null ? "—" : currency(row.periodAAvgCpc)}
+                    <td className="px-6 py-4">{currency(row.periodARevenue)}</td>
+                    <td className="px-6 py-4">{currency(row.periodBRevenue)}</td>
+                    <td className={`px-6 py-4 font-medium ${deltaClass(row.deltaRevenue)}`}>
+                      {signedCurrency(row.deltaRevenue)}
                     </td>
-                    <td className="px-6 py-4">
-                      {row.periodBAvgCpc === null ? "—" : currency(row.periodBAvgCpc)}
+                    <td className={`px-6 py-4 font-medium ${deltaClass(row.deltaRevenuePct)}`}>
+                      {signedPercent(row.deltaRevenuePct)}
                     </td>
-                    <td className={`px-6 py-4 font-medium ${spendDeltaClass(row.deltaAvgCpc ?? 0)}`}>
-                      {row.deltaAvgCpc === null ? "—" : signedCurrency(row.deltaAvgCpc)}
+
+                    <td className="px-6 py-4">{currency(row.periodACost)}</td>
+                    <td className="px-6 py-4">{currency(row.periodBCost)}</td>
+                    <td className={`px-6 py-4 font-medium ${costDeltaClass(row.deltaCost)}`}>
+                      {signedCurrency(row.deltaCost)}
                     </td>
-                    <td className={`px-6 py-4 font-medium ${spendDeltaPctClass(row.deltaAvgCpcPct)}`}>
-                      {signedPercent(row.deltaAvgCpcPct)}
+                    <td className={`px-6 py-4 font-medium ${costDeltaPctClass(row.deltaCostPct)}`}>
+                      {signedPercent(row.deltaCostPct)}
+                    </td>
+
+                    <td className="px-6 py-4">{currency(row.periodAProfit)}</td>
+                    <td className="px-6 py-4">{currency(row.periodBProfit)}</td>
+                    <td className={`px-6 py-4 font-medium ${deltaClass(row.deltaProfit)}`}>
+                      {signedCurrency(row.deltaProfit)}
+                    </td>
+                    <td className={`px-6 py-4 font-medium ${deltaClass(row.deltaProfitPct)}`}>
+                      {signedPercent(row.deltaProfitPct)}
+                    </td>
+
+                    <td className="px-6 py-4">{percent(row.periodAMarginPct)}</td>
+                    <td className="px-6 py-4">{percent(row.periodBMarginPct)}</td>
+                    <td className={`px-6 py-4 font-medium ${deltaClass(row.deltaMarginPct)}`}>
+                      {signedPercent(row.deltaMarginPct)}
                     </td>
                   </tr>
                 ))

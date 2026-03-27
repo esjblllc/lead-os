@@ -197,6 +197,11 @@ export default async function PerformancePage({
   const profitableRows = rows.filter((row) => row.profit > 0).length;
 
   const basePath = "/performance";
+  const exportHref = `/api/reports/performance/export?range=${encodeURIComponent(
+    range
+  )}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(
+    to
+  )}&groupBy=${encodeURIComponent(groupBy)}`;
 
   return (
     <div className="space-y-6">
@@ -309,6 +314,13 @@ export default async function PerformancePage({
               >
                 Apply Filters
               </button>
+
+              <Link
+                href={exportHref}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Export CSV
+              </Link>
 
               <Link
                 href={basePath}

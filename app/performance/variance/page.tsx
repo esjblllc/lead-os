@@ -317,13 +317,17 @@ export default async function PerformanceVariancePage({
 
   const groupBy: GroupByOption = params.groupBy || "subId";
 
-  const { periodAFrom, periodATo, periodBFrom, periodBTo } =
-    buildComparisonDefaults(
-      params.periodAFrom,
-      params.periodATo,
-      params.periodBFrom,
-      params.periodBTo
-    );
+  const {
+    periodAFrom,
+    periodATo,
+    periodBFrom,
+    periodBTo,
+  } = buildComparisonDefaults(
+    params.periodAFrom,
+    params.periodATo,
+    params.periodBFrom,
+    params.periodBTo
+  );
 
   const periodABounds = getDateBounds(periodAFrom, periodATo);
   const periodBBounds = getDateBounds(periodBFrom, periodBTo);
@@ -408,6 +412,17 @@ export default async function PerformanceVariancePage({
     totalPeriodAMarginPct === null || totalPeriodBMarginPct === null
       ? null
       : totalPeriodAMarginPct - totalPeriodBMarginPct;
+
+  const exportHref =
+    `/api/reports/performance-variance/export?periodAFrom=${encodeURIComponent(
+      periodAFrom
+    )}&periodATo=${encodeURIComponent(
+      periodATo
+    )}&periodBFrom=${encodeURIComponent(
+      periodBFrom
+    )}&periodBTo=${encodeURIComponent(
+      periodBTo
+    )}&groupBy=${encodeURIComponent(groupBy)}`;
 
   return (
     <div className="space-y-6">
@@ -509,6 +524,13 @@ export default async function PerformanceVariancePage({
               >
                 Compare Periods
               </button>
+
+              <Link
+                href={exportHref}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Export CSV
+              </Link>
 
               <Link
                 href="/performance/variance"
