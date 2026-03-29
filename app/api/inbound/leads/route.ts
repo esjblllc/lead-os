@@ -591,6 +591,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let clickEvent: {
+      clickId: string;
+      trackingLinkId: string | null;
+      trackingCampaignId: string | null;
+      trafficSource: string | null;
+      publisherId: string | null;
+      subId: string | null;
+    } | null = null;
+
+    const incomingClickId =
+      body.click_id || body.clickId || body.clickid || null;
+
+    if (incomingClickId) {
+      clickEvent = await db.clickEvent.findUnique({
+        where: {
+          clickId: String(incomingClickId),
+        },
+        select: {
+          clickId: true,
+          trackingLinkId: true,
+          trackingCampaignId: true,
+          trafficSource: true,
+          publisherId: true,
+          subId: true,
+        },
+      });
+    }
+
     const lead = await db.lead.create({
       data: {
         organizationId: campaign.organizationId,
@@ -602,9 +630,16 @@ export async function POST(req: NextRequest) {
         phone: body.phone || null,
         state: body.state || null,
         zip: body.zip || null,
-        source: body.source || supplier.trafficSource || null,
-        subId: body.subId || null,
-        publisherId: body.publisherId || null,
+        source:
+          body.source ||
+          clickEvent?.trafficSource ||
+          supplier.trafficSource ||
+          null,
+        subId: body.subId || clickEvent?.subId || null,
+        publisherId: body.publisherId || clickEvent?.publisherId || null,
+        clickId: clickEvent?.clickId || (incomingClickId ? String(incomingClickId) : null),
+        trackingLinkId: clickEvent?.trackingLinkId || null,
+        trackingCampaignId: clickEvent?.trackingCampaignId || null,
         cost:
           typeof body.cost !== "undefined" && body.cost !== null
             ? Number(body.cost)
