@@ -259,6 +259,17 @@ export default function LeadsPage() {
     setToDate("");
   }
 
+  function clearAllFilters() {
+    setSearch("");
+    setStatusFilter("all");
+    setBuyerFilter("all");
+    setCampaignFilter("all");
+    setSupplierFilter("all");
+    setDateRange("all");
+    setFromDate("");
+    setToDate("");
+  }
+
   async function exportVisibleLeads() {
     try {
       setExporting(true);
@@ -309,6 +320,16 @@ export default function LeadsPage() {
 
     return { total, assigned, pending, totalRevenue, totalCost, totalProfit };
   }, [filteredLeads]);
+
+  const hasActiveFilters =
+    search.trim() !== "" ||
+    statusFilter !== "all" ||
+    buyerFilter !== "all" ||
+    campaignFilter !== "all" ||
+    supplierFilter !== "all" ||
+    dateRange !== "all" ||
+    fromDate !== "" ||
+    toDate !== "";
 
   if (loading) {
     return <div className="p-6 text-sm text-gray-500">Loading leads...</div>;
@@ -408,7 +429,54 @@ export default function LeadsPage() {
         </div>
 
         <div className="border-t border-gray-200 p-6">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+          <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-gray-900">
+                  Workspace Controls
+                </div>
+                <div className="mt-1 text-sm text-gray-500">
+                  Filter the lead inventory, narrow by traffic source or routing outcome, then export exactly what is visible.
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                <div className="font-semibold">Current View</div>
+                <div className="mt-1">
+                  Showing {filteredLeads.length} of {leads.length} leads
+                  {hasActiveFilters ? " with filters applied." : "."}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {hasActiveFilters ? (
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                >
+                  Reset All Filters
+                </button>
+              ) : (
+                <div className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-2 text-sm text-gray-500">
+                  No filters applied.
+                </div>
+              )}
+
+              {(fromDate || toDate) && (
+                <button
+                  type="button"
+                  onClick={clearCustomRange}
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Clear Custom Dates
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             <div className="xl:col-span-2">
               <label className="mb-2 block text-sm font-medium text-gray-700">
                 Search
@@ -534,7 +602,7 @@ export default function LeadsPage() {
             </div>
 
             <div className="flex items-end text-sm text-gray-500 md:col-span-2 xl:col-span-3">
-              Showing {filteredLeads.length} of {leads.length} leads
+              Export always uses the same filters you see on screen.
             </div>
           </div>
         </div>
@@ -656,6 +724,29 @@ export default function LeadsPage() {
                                 </h3>
 
                                 <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm text-sm space-y-2">
+                                  <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
+                                    <div className="text-sm font-semibold text-gray-900">
+                                      Lead Snapshot
+                                    </div>
+                                    <div className="mt-2 grid gap-3 md:grid-cols-2 text-sm text-gray-700">
+                                      <div>
+                                        <span className="font-medium">Routing:</span>{" "}
+                                        {lead.routingStatus}
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Buyer:</span>{" "}
+                                        {lead.assignedBuyer?.name || "Unassigned"}
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Revenue:</span>{" "}
+                                        {currency(revenue)}
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Profit:</span>{" "}
+                                        {currency(profit)}
+                                      </div>
+                                    </div>
+                                  </div>
                                   <div>
                                     <span className="font-medium">Phone:</span>{" "}
                                     {lead.phone || "—"}
@@ -698,6 +789,13 @@ export default function LeadsPage() {
                                   </div>
                                 ) : (
                                   <div className="space-y-3">
+                                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                                      <div className="font-semibold">Bid Flow</div>
+                                      <div className="mt-1">
+                                        Review which buyers responded, whether a winner was selected, and what bid values were returned.
+                                      </div>
+                                    </div>
+
                                     {lead.pingResults.map((ping) => (
                                       <div
                                         key={ping.id}
@@ -758,6 +856,13 @@ export default function LeadsPage() {
                                   </div>
                                 ) : (
                                   <div className="space-y-3">
+                                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                                      <div className="font-semibold">Delivery Timeline</div>
+                                      <div className="mt-1">
+                                        Track each post attempt, the returned status, and the response code from the buyer side.
+                                      </div>
+                                    </div>
+
                                     {lead.deliveries.map((delivery) => (
                                       <div
                                         key={delivery.id}
