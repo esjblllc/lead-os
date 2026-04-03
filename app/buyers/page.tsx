@@ -100,6 +100,9 @@ export default function BuyersPage() {
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [savedNoticeById, setSavedNoticeById] = useState<Record<string, string>>(
+    {}
+  );
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
@@ -336,11 +339,28 @@ export default function BuyersPage() {
       }
 
       await fetchBuyers();
+      showSavedNotice(id, "Buyer settings saved.");
     } catch (err) {
       console.error("Buyer save error:", err);
     } finally {
       setSavingId(null);
     }
+  }
+
+  function showSavedNotice(buyerId: string, message: string) {
+    setSavedNoticeById((prev) => ({
+      ...prev,
+      [buyerId]: message,
+    }));
+
+    window.setTimeout(() => {
+      setSavedNoticeById((prev) => {
+        if (prev[buyerId] !== message) return prev;
+        const next = { ...prev };
+        delete next[buyerId];
+        return next;
+      });
+    }, 2500);
   }
 
   async function runResponseTest(id: string) {
@@ -856,6 +876,37 @@ export default function BuyersPage() {
                                 </h3>
 
                                 <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                                  <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
+                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                      <div>
+                                        <div className="text-sm font-semibold text-gray-900">
+                                          Commercial + Routing Setup
+                                        </div>
+                                        <div className="mt-1 text-sm text-gray-500">
+                                          Keep contact details, pricing, caps, endpoints, and response parsing rules aligned for this buyer.
+                                        </div>
+                                      </div>
+
+                                      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                                        <div className="font-semibold">Buyer Snapshot</div>
+                                        <div className="mt-1">
+                                          Current PPL:{" "}
+                                          {draft?.pricePerLead
+                                            ? `$${Number(draft.pricePerLead).toFixed(2)}`
+                                            : "not set"}
+                                          {" | "}Daily Cap: {draft?.dailyCap || "none"}
+                                          {" | "}Mode: {draft?.acceptanceMode || "standard"}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {savedNoticeById[buyer.id] ? (
+                                    <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                                      {savedNoticeById[buyer.id]}
+                                    </div>
+                                  ) : null}
+
                                   <div className="grid gap-4 md:grid-cols-3">
                                     <div>
                                       <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -1169,6 +1220,13 @@ export default function BuyersPage() {
                                     </p>
                                   </div>
 
+                                  <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                                    <div className="font-semibold">Safe Validation Step</div>
+                                    <div className="mt-1">
+                                      Use this before sending live traffic so you can verify acceptance rules and payout parsing against real sample responses.
+                                    </div>
+                                  </div>
+
                                   <label className="mb-2 block text-sm font-medium text-gray-700">
                                     Sample Response JSON
                                   </label>
@@ -1308,8 +1366,19 @@ export default function BuyersPage() {
                                 </h3>
 
                                 <div className="rounded-2xl border border-gray-200 bg-white p-5 text-sm shadow-sm space-y-4">
+                                  <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                                    <div className="text-sm font-semibold text-blue-900">
+                                      Buyer Handoff
+                                    </div>
+                                    <div className="mt-2 text-sm text-blue-800">
+                                      Copy the live endpoints, review the current parsing config, and generate a buyer spec whenever you need to share integration details.
+                                    </div>
+                                  </div>
                                   <div>
                                     <div className="font-medium text-gray-800">Ping URL</div>
+                                    <div className="mt-1 text-xs text-gray-500">
+                                      Used for ping/post bidding when this buyer is configured for ping traffic.
+                                    </div>
                                     <div className="mt-2 break-all rounded-xl bg-gray-50 p-3 text-xs text-gray-700">
                                       {buyer.pingUrl || "—"}
                                     </div>
@@ -1324,6 +1393,9 @@ export default function BuyersPage() {
 
                                   <div>
                                     <div className="font-medium text-gray-800">Post URL</div>
+                                    <div className="mt-1 text-xs text-gray-500">
+                                      Used for full lead delivery. Falls back to the legacy webhook URL when needed.
+                                    </div>
                                     <div className="mt-2 break-all rounded-xl bg-gray-50 p-3 text-xs text-gray-700">
                                       {buyer.postUrl || buyer.webhookUrl || "—"}
                                     </div>
@@ -1350,7 +1422,7 @@ export default function BuyersPage() {
                                       Current Parsing Config
                                     </div>
                                     <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700 space-y-1">
-                                      <div>Mode: {buyer.acceptanceMode || "standard"}</div>
+                                      <div>Mode: {draft?.acceptanceMode || buyer.acceptanceMode || "standard"}</div>
                                       <div>Acceptance Path: {buyer.acceptancePath || "—"}</div>
                                       <div>Acceptance Value: {buyer.acceptanceValue || "—"}</div>
                                       <div>Payout Path: {buyer.payoutPath || "—"}</div>
