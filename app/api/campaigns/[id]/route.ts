@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
 import { getRequestSessionUser, isPlatformAdmin } from "@/lib/request-session-user";
-import { normalizeInboundFieldList } from "@/lib/inbound-spec";
+import {
+  normalizeCustomInboundFields,
+  normalizeInboundFieldList,
+} from "@/lib/inbound-spec";
 
 type RouteContext = {
   params: Promise<{
@@ -55,6 +58,13 @@ export async function PATCH(req: Request, context: RouteContext) {
           ? {
               inboundOptionalFields: normalizeInboundFieldList(
                 body.inboundOptionalFields
+              ),
+            }
+          : {}),
+        ...(typeof body.customInboundFields !== "undefined"
+          ? {
+              customInboundFields: normalizeCustomInboundFields(
+                body.customInboundFields
               ),
             }
           : {}),

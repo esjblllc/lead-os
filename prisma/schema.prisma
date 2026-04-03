@@ -124,6 +124,7 @@ model Campaign {
   status         String
   inboundRequiredFields String?
   inboundOptionalFields String?
+  customInboundFields String?
   publisherSpecNotes String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -167,6 +168,7 @@ model Lead {
   source          String?
   subId           String?
   publisherId     String?
+  customData      String?
 
   cost            Decimal? @db.Decimal(10, 2)
   profit          Decimal? @db.Decimal(10, 2)

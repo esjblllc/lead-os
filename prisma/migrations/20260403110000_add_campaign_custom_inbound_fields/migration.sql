@@ -1,0 +1,5 @@
+ALTER TABLE "Campaign"
+ADD COLUMN IF NOT EXISTS "customInboundFields" TEXT;
+
+ALTER TABLE "Lead"
+ADD COLUMN IF NOT EXISTS "customData" TEXT;

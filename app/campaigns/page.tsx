@@ -2,8 +2,10 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
+  type CustomInboundFieldDefinition,
   INBOUND_FIELD_DEFINITIONS,
   parseInboundFieldList,
+  sanitizeCustomInboundFieldKey,
 } from "@/lib/inbound-spec";
 
 type Campaign = {
@@ -16,6 +18,7 @@ type Campaign = {
   status: string;
   inboundRequiredFields?: string | null;
   inboundOptionalFields?: string | null;
+  customInboundFields?: string | null;
   publisherSpecNotes?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -29,6 +32,7 @@ type CampaignDraft = {
   status: string;
   inboundRequiredFields: string;
   inboundOptionalFields: string;
+  customInboundFields: string;
   publisherSpecNotes: string;
 };
 
@@ -41,7 +45,6 @@ type CampaignExportOptions = {
 };
 
 type FieldStatus = "hidden" | "optional" | "required";
-
 const DEFAULT_OPTIONAL_FIELDS = [
   "firstName",
   "lastName",
@@ -53,6 +56,19 @@ const DEFAULT_OPTIONAL_FIELDS = [
 
 function serializeFieldSet(values: Set<string>) {
   return Array.from(values).join(",");
+}
+
+function parseCustomFieldDrafts(value: string) {
+  if (!value) return [] as CustomInboundFieldDefinition[];
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? (parsed as CustomInboundFieldDefinition[])
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function normalize(value: unknown) {
@@ -100,6 +116,7 @@ export default function CampaignsPage() {
     status: "active",
     inboundRequiredFields: "",
     inboundOptionalFields: DEFAULT_OPTIONAL_FIELDS,
+    customInboundFields: "[]",
     publisherSpecNotes: "",
   });
 
@@ -128,6 +145,7 @@ export default function CampaignsPage() {
         status: campaign.status || "active",
         inboundRequiredFields: campaign.inboundRequiredFields || "",
         inboundOptionalFields: campaign.inboundOptionalFields || "",
+        customInboundFields: campaign.customInboundFields || "[]",
         publisherSpecNotes: campaign.publisherSpecNotes || "",
       };
     });
@@ -274,6 +292,116 @@ export default function CampaignsPage() {
     });
   }
 
+  function getCustomFields(value: string) {
+    return parseCustomFieldDrafts(value);
+  }
+
+  function updateNewCustomFields(
+    updater: (fields: CustomInboundFieldDefinition[]) => CustomInboundFieldDefinition[]
+  ) {
+    setNewCampaign((prev) => ({
+      ...prev,
+      customInboundFields: JSON.stringify(
+        updater(getCustomFields(prev.customInboundFields))
+      ),
+    }));
+  }
+
+  function updateDraftCustomFields(
+    campaignId: string,
+    updater: (fields: CustomInboundFieldDefinition[]) => CustomInboundFieldDefinition[]
+  ) {
+    setDrafts((prev) => {
+      const current = prev[campaignId];
+      if (!current) return prev;
+
+      return {
+        ...prev,
+        [campaignId]: {
+          ...current,
+          customInboundFields: JSON.stringify(
+            updater(getCustomFields(current.customInboundFields))
+          ),
+        },
+      };
+    });
+  }
+
+  function addNewCustomField() {
+    updateNewCustomFields((fields) => [
+      ...fields,
+      {
+        key: "",
+        label: "",
+        description: "",
+        example: "",
+        status: "optional",
+      },
+    ]);
+  }
+
+  function addDraftCustomField(campaignId: string) {
+    updateDraftCustomFields(campaignId, (fields) => [
+      ...fields,
+      {
+        key: "",
+        label: "",
+        description: "",
+        example: "",
+        status: "optional",
+      },
+    ]);
+  }
+
+  function updateNewCustomField(
+    index: number,
+    field: keyof CustomInboundFieldDefinition,
+    value: string
+  ) {
+    updateNewCustomFields((fields) =>
+      fields.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [field]:
+                field === "key" ? sanitizeCustomInboundFieldKey(value) : value,
+            }
+          : item
+      )
+    );
+  }
+
+  function updateDraftCustomField(
+    campaignId: string,
+    index: number,
+    field: keyof CustomInboundFieldDefinition,
+    value: string
+  ) {
+    updateDraftCustomFields(campaignId, (fields) =>
+      fields.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [field]:
+                field === "key" ? sanitizeCustomInboundFieldKey(value) : value,
+            }
+          : item
+      )
+    );
+  }
+
+  function removeNewCustomField(index: number) {
+    updateNewCustomFields((fields) =>
+      fields.filter((_, itemIndex) => itemIndex !== index)
+    );
+  }
+
+  function removeDraftCustomField(campaignId: string, index: number) {
+    updateDraftCustomFields(campaignId, (fields) =>
+      fields.filter((_, itemIndex) => itemIndex !== index)
+    );
+  }
+
   async function createCampaign(e: React.FormEvent) {
     e.preventDefault();
     setCreateError("");
@@ -310,6 +438,7 @@ export default function CampaignsPage() {
           status: newCampaign.status,
           inboundRequiredFields: newCampaign.inboundRequiredFields,
           inboundOptionalFields: newCampaign.inboundOptionalFields,
+          customInboundFields: newCampaign.customInboundFields,
           publisherSpecNotes: newCampaign.publisherSpecNotes,
         }),
       });
@@ -330,6 +459,7 @@ export default function CampaignsPage() {
         status: "active",
         inboundRequiredFields: "",
         inboundOptionalFields: DEFAULT_OPTIONAL_FIELDS,
+        customInboundFields: "[]",
         publisherSpecNotes: "",
       });
 
@@ -367,6 +497,7 @@ export default function CampaignsPage() {
           status: draft.status,
           inboundRequiredFields: draft.inboundRequiredFields,
           inboundOptionalFields: draft.inboundOptionalFields,
+          customInboundFields: draft.customInboundFields,
           publisherSpecNotes: draft.publisherSpecNotes,
         }),
       });
@@ -434,6 +565,7 @@ export default function CampaignsPage() {
       draft.status !== normalize(campaign.status) ||
       draft.inboundRequiredFields !== normalize(campaign.inboundRequiredFields) ||
       draft.inboundOptionalFields !== normalize(campaign.inboundOptionalFields) ||
+      draft.customInboundFields !== normalize(campaign.customInboundFields || "[]") ||
       draft.publisherSpecNotes !== normalize(campaign.publisherSpecNotes)
     );
   }
@@ -616,6 +748,132 @@ export default function CampaignsPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+
+                <div className="mt-4 border-t border-gray-200 pt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        Custom Fields
+                      </div>
+                      <div className="mt-1 text-sm text-gray-500">
+                        Add campaign-specific fields that should appear in the publisher spec and be validated on inbound posts.
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={addNewCustomField}
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Add Custom Field
+                    </button>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {getCustomFields(newCampaign.customInboundFields).length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                        No custom fields added yet.
+                      </div>
+                    ) : (
+                      getCustomFields(newCampaign.customInboundFields).map(
+                        (field, index) => (
+                          <div
+                            key={`${field.key || "new"}-${index}`}
+                            className="rounded-xl border border-gray-200 bg-gray-50 p-4"
+                          >
+                            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                              <div>
+                                <label className="mb-2 block text-sm font-medium text-gray-700">
+                                  Field Key
+                                </label>
+                                <input
+                                  value={field.key}
+                                  onChange={(e) =>
+                                    updateNewCustomField(index, "key", e.target.value)
+                                  }
+                                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                  placeholder="dateOfBirth"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="mb-2 block text-sm font-medium text-gray-700">
+                                  Label
+                                </label>
+                                <input
+                                  value={field.label}
+                                  onChange={(e) =>
+                                    updateNewCustomField(index, "label", e.target.value)
+                                  }
+                                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                  placeholder="Date of Birth"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="mb-2 block text-sm font-medium text-gray-700">
+                                  Example
+                                </label>
+                                <input
+                                  value={field.example}
+                                  onChange={(e) =>
+                                    updateNewCustomField(index, "example", e.target.value)
+                                  }
+                                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                  placeholder="1950-01-31"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="mb-2 block text-sm font-medium text-gray-700">
+                                  Status
+                                </label>
+                                <select
+                                  value={field.status}
+                                  onChange={(e) =>
+                                    updateNewCustomField(index, "status", e.target.value)
+                                  }
+                                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                >
+                                  <option value="optional">Optional</option>
+                                  <option value="required">Required</option>
+                                </select>
+                              </div>
+
+                              <div className="flex items-end">
+                                <button
+                                  type="button"
+                                  onClick={() => removeNewCustomField(index)}
+                                  className="w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 hover:bg-red-100"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+
+                              <div className="md:col-span-2 xl:col-span-5">
+                                <label className="mb-2 block text-sm font-medium text-gray-700">
+                                  Description
+                                </label>
+                                <input
+                                  value={field.description}
+                                  onChange={(e) =>
+                                    updateNewCustomField(
+                                      index,
+                                      "description",
+                                      e.target.value
+                                    )
+                                  }
+                                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                  placeholder="Explain what the publisher should send for this field."
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      )
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-4">
@@ -912,6 +1170,160 @@ export default function CampaignsPage() {
                                       ))}
                                     </div>
 
+                                    <div className="mt-4 border-t border-gray-200 pt-4">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <div>
+                                          <div className="text-sm font-medium text-gray-900">
+                                            Custom Fields
+                                          </div>
+                                          <div className="mt-1 text-sm text-gray-500">
+                                            Add custom campaign fields to the spec and inbound validation.
+                                          </div>
+                                        </div>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => addDraftCustomField(campaign.id)}
+                                          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                        >
+                                          Add Custom Field
+                                        </button>
+                                      </div>
+
+                                      <div className="mt-4 space-y-3">
+                                        {getCustomFields(
+                                          draft?.customInboundFields || "[]"
+                                        ).length === 0 ? (
+                                          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                                            No custom fields added yet.
+                                          </div>
+                                        ) : (
+                                          getCustomFields(
+                                            draft?.customInboundFields || "[]"
+                                          ).map((field, index) => (
+                                            <div
+                                              key={`${field.key || "draft"}-${index}`}
+                                              className="rounded-xl border border-gray-200 bg-gray-50 p-4"
+                                            >
+                                              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                                                <div>
+                                                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                                                    Field Key
+                                                  </label>
+                                                  <input
+                                                    value={field.key}
+                                                    onChange={(e) =>
+                                                      updateDraftCustomField(
+                                                        campaign.id,
+                                                        index,
+                                                        "key",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                                    placeholder="dateOfBirth"
+                                                  />
+                                                </div>
+
+                                                <div>
+                                                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                                                    Label
+                                                  </label>
+                                                  <input
+                                                    value={field.label}
+                                                    onChange={(e) =>
+                                                      updateDraftCustomField(
+                                                        campaign.id,
+                                                        index,
+                                                        "label",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                                    placeholder="Date of Birth"
+                                                  />
+                                                </div>
+
+                                                <div>
+                                                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                                                    Example
+                                                  </label>
+                                                  <input
+                                                    value={field.example}
+                                                    onChange={(e) =>
+                                                      updateDraftCustomField(
+                                                        campaign.id,
+                                                        index,
+                                                        "example",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                                    placeholder="1950-01-31"
+                                                  />
+                                                </div>
+
+                                                <div>
+                                                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                                                    Status
+                                                  </label>
+                                                  <select
+                                                    value={field.status}
+                                                    onChange={(e) =>
+                                                      updateDraftCustomField(
+                                                        campaign.id,
+                                                        index,
+                                                        "status",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                                  >
+                                                    <option value="optional">Optional</option>
+                                                    <option value="required">Required</option>
+                                                  </select>
+                                                </div>
+
+                                                <div className="flex items-end">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      removeDraftCustomField(
+                                                        campaign.id,
+                                                        index
+                                                      )
+                                                    }
+                                                    className="w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 hover:bg-red-100"
+                                                  >
+                                                    Remove
+                                                  </button>
+                                                </div>
+
+                                                <div className="md:col-span-2 xl:col-span-5">
+                                                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                                                    Description
+                                                  </label>
+                                                  <input
+                                                    value={field.description}
+                                                    onChange={(e) =>
+                                                      updateDraftCustomField(
+                                                        campaign.id,
+                                                        index,
+                                                        "description",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                                    placeholder="Explain what the publisher should send for this field."
+                                                  />
+                                                </div>
+                                              </div>
+                                            </div>
+                                          ))
+                                        )}
+                                      </div>
+                                    </div>
+
                                     <div className="mt-4">
                                       <label className="mb-2 block text-sm font-medium text-gray-700">
                                         Publisher Notes
@@ -1100,6 +1512,24 @@ export default function CampaignsPage() {
                                       {parseInboundFieldList(
                                         draft?.inboundOptionalFields || ""
                                       ).join(", ") || "none"}
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <div className="font-medium text-gray-800">Custom Fields</div>
+                                    <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700">
+                                      {getCustomFields(
+                                        draft?.customInboundFields || "[]"
+                                      ).length === 0
+                                        ? "none"
+                                        : getCustomFields(
+                                            draft?.customInboundFields || "[]"
+                                          )
+                                            .map(
+                                              (field) =>
+                                                `${field.key} (${field.status})`
+                                            )
+                                            .join(", ")}
                                     </div>
                                   </div>
                                 </div>

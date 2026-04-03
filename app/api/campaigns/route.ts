@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
 import { getRequestSessionUser, isPlatformAdmin } from "@/lib/request-session-user";
-import { normalizeInboundFieldList } from "@/lib/inbound-spec";
+import {
+  normalizeCustomInboundFields,
+  normalizeInboundFieldList,
+} from "@/lib/inbound-spec";
 
 export async function GET(req: Request) {
   try {
@@ -45,6 +48,7 @@ export async function POST(req: Request) {
       status,
       inboundRequiredFields,
       inboundOptionalFields,
+      customInboundFields,
       publisherSpecNotes,
     } = body;
 
@@ -65,6 +69,7 @@ export async function POST(req: Request) {
         status: status || "active",
         inboundRequiredFields: normalizeInboundFieldList(inboundRequiredFields),
         inboundOptionalFields: normalizeInboundFieldList(inboundOptionalFields),
+        customInboundFields: normalizeCustomInboundFields(customInboundFields),
         publisherSpecNotes: publisherSpecNotes || null,
       },
     });

@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { parseBuyerResponse } from "@/lib/buyer-response";
-import { parseInboundFieldList } from "@/lib/inbound-spec";
+import {
+  extractCustomInboundData,
+  getRequiredInboundFieldKeys,
+} from "@/lib/inbound-spec";
 
 type BuyerForRouting = {
   id: string;
@@ -592,9 +595,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const missingRequiredFields = parseInboundFieldList(
-      campaign.inboundRequiredFields
-    ).filter((field) => {
+    const missingRequiredFields = getRequiredInboundFieldKeys({
+      requiredFields: campaign.inboundRequiredFields,
+      customFields: campaign.customInboundFields,
+    }).filter((field) => {
       const value = body[field];
       return value === null || typeof value === "undefined" || value === "";
     });
@@ -607,6 +611,11 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const customData = extractCustomInboundData(
+      body as Record<string, unknown>,
+      campaign.customInboundFields
+    );
 
     let clickEvent: {
       clickId: string;
@@ -654,6 +663,10 @@ export async function POST(req: NextRequest) {
           null,
         subId: body.subId || clickEvent?.subId || null,
         publisherId: body.publisherId || clickEvent?.publisherId || null,
+        customData:
+          Object.keys(customData).length > 0
+            ? JSON.stringify(customData)
+            : null,
         clickId: clickEvent?.clickId || (incomingClickId ? String(incomingClickId) : null),
         trackingLinkId: clickEvent?.trackingLinkId || null,
         trackingCampaignId: clickEvent?.trackingCampaignId || null,

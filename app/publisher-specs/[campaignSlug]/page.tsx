@@ -65,6 +65,7 @@ export default async function PublisherSpecPage({
   const fieldSelection = buildInboundFieldSelection({
     requiredFields: campaign.inboundRequiredFields,
     optionalFields: campaign.inboundOptionalFields,
+    customFields: campaign.customInboundFields,
   }).filter((field) => field.status !== "hidden");
 
   const samplePayload = buildInboundSamplePayload({
@@ -72,6 +73,7 @@ export default async function PublisherSpecPage({
     source: supplier.trafficSource,
     requiredFields: campaign.inboundRequiredFields,
     optionalFields: campaign.inboundOptionalFields,
+    customFields: campaign.customInboundFields,
   });
 
   const curlExample = `curl -X POST "${endpointUrl}" \\

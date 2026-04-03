@@ -52,6 +52,7 @@ export default async function InboundPage({
     source: selectedSupplier?.trafficSource || "facebook",
     requiredFields: selectedCampaign?.inboundRequiredFields,
     optionalFields: selectedCampaign?.inboundOptionalFields,
+    customFields: selectedCampaign?.customInboundFields,
   });
 
   const samplePayloadWithCost = {
@@ -67,6 +68,7 @@ export default async function InboundPage({
   const fieldSelection = buildInboundFieldSelection({
     requiredFields: selectedCampaign?.inboundRequiredFields,
     optionalFields: selectedCampaign?.inboundOptionalFields,
+    customFields: selectedCampaign?.customInboundFields,
   }).filter((field) => field.status !== "hidden");
 
   const curlExample = `curl -X POST "${origin}${endpointPath}" \\
