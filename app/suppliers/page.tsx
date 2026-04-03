@@ -60,6 +60,9 @@ export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [savedNoticeById, setSavedNoticeById] = useState<Record<string, string>>(
+    {}
+  );
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
@@ -217,11 +220,28 @@ export default function SuppliersPage() {
       }
 
       await fetchSuppliers();
+      showSavedNotice(id, "Supplier settings saved.");
     } catch (err) {
       console.error("Supplier save error:", err);
     } finally {
       setSavingId(null);
     }
+  }
+
+  function showSavedNotice(supplierId: string, message: string) {
+    setSavedNoticeById((prev) => ({
+      ...prev,
+      [supplierId]: message,
+    }));
+
+    window.setTimeout(() => {
+      setSavedNoticeById((prev) => {
+        if (prev[supplierId] !== message) return prev;
+        const next = { ...prev };
+        delete next[supplierId];
+        return next;
+      });
+    }, 2500);
   }
 
   async function regenerateApiKey(id: string) {
@@ -597,6 +617,32 @@ export default function SuppliersPage() {
                                 </h3>
 
                                 <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                                  <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
+                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                      <div>
+                                        <div className="text-sm font-semibold text-gray-900">
+                                          Supplier Details
+                                        </div>
+                                        <div className="mt-1 text-sm text-gray-500">
+                                          Keep contact information, traffic source defaults, and supplier status current.
+                                        </div>
+                                      </div>
+
+                                      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                                        <div className="font-semibold">Live Posting Summary</div>
+                                        <div className="mt-1">
+                                          RouteIQ will authenticate this source by API key and apply the default cost when the publisher does not send one.
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {savedNoticeById[supplier.id] ? (
+                                    <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                                      {savedNoticeById[supplier.id]}
+                                    </div>
+                                  ) : null}
+
                                   <div className="grid gap-4 md:grid-cols-3">
                                     <div>
                                       <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -790,9 +836,21 @@ export default function SuppliersPage() {
                                 </h3>
 
                                 <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm text-sm space-y-4">
+                                  <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                                    <div className="text-sm font-semibold text-blue-900">
+                                      Publisher Handoff
+                                    </div>
+                                    <div className="mt-2 text-sm text-blue-800">
+                                      Share the API key, endpoint, and campaign-specific inbound spec so this supplier can start posting with the right format.
+                                    </div>
+                                  </div>
+
                                   <div>
                                     <div className="font-medium text-gray-800">
                                       API Key
+                                    </div>
+                                    <div className="mt-1 text-xs text-gray-500">
+                                      This identifies the supplier on every inbound lead request.
                                     </div>
                                     <div className="mt-2 break-all rounded-xl bg-gray-50 p-3 text-xs text-gray-700">
                                       {supplier.apiKey}
@@ -821,6 +879,9 @@ export default function SuppliersPage() {
                                     <div className="font-medium text-gray-800">
                                       Inbound Endpoint
                                     </div>
+                                    <div className="mt-1 text-xs text-gray-500">
+                                      Publishers should send POST requests here with the supplier API key in the header.
+                                    </div>
                                     <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700 break-all">
                                       /api/inbound/leads
                                     </div>
@@ -844,7 +905,7 @@ export default function SuppliersPage() {
 
                                   <div>
                                     <div className="font-medium text-gray-800">
-                                      Header
+                                      Authentication Header
                                     </div>
                                     <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700 break-all">
                                       x-api-key: {supplier.apiKey}
@@ -854,6 +915,9 @@ export default function SuppliersPage() {
                                   <div>
                                     <div className="font-medium text-gray-800">
                                       Sample Payload
+                                    </div>
+                                    <div className="mt-1 text-xs text-gray-500">
+                                      This is the baseline payload. Campaign-specific required fields will appear on the generated supplier spec page.
                                     </div>
                                     <pre className="mt-2 whitespace-pre-wrap rounded-xl bg-gray-50 p-3 text-xs text-gray-700">
 {`{
