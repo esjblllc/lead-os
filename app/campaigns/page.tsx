@@ -30,6 +30,12 @@ type NewCampaignForm = {
   status: string;
 };
 
+type CampaignExportOptions = {
+  fromDate: string;
+  toDate: string;
+  sortOrder: "desc" | "asc";
+};
+
 function normalize(value: unknown) {
   return value === null || typeof value === "undefined" ? "" : String(value);
 }
@@ -59,6 +65,9 @@ export default function CampaignsPage() {
   const [createSuccess, setCreateSuccess] = useState("");
   const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, CampaignDraft>>({});
+  const [exportOptions, setExportOptions] = useState<
+    Record<string, CampaignExportOptions>
+  >({});
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -112,6 +121,41 @@ export default function CampaignsPage() {
       [id]: {
         ...prev[id],
         [field]: value,
+      },
+    }));
+  }
+
+  function getExportOptions(campaignId: string): CampaignExportOptions {
+    return (
+      exportOptions[campaignId] || {
+        fromDate: "",
+        toDate: "",
+        sortOrder: "desc",
+      }
+    );
+  }
+
+  function updateExportOptions(
+    campaignId: string,
+    field: keyof CampaignExportOptions,
+    value: string
+  ) {
+    setExportOptions((prev) => ({
+      ...prev,
+      [campaignId]: {
+        ...getExportOptions(campaignId),
+        [field]: value,
+      },
+    }));
+  }
+
+  function clearExportDateRange(campaignId: string) {
+    setExportOptions((prev) => ({
+      ...prev,
+      [campaignId]: {
+        ...getExportOptions(campaignId),
+        fromDate: "",
+        toDate: "",
       },
     }));
   }
@@ -235,7 +279,16 @@ export default function CampaignsPage() {
     try {
       setExportingId(campaign.id);
 
-      const res = await fetch(`/api/campaigns/${campaign.id}/leads/export`);
+      const options = getExportOptions(campaign.id);
+      const params = new URLSearchParams();
+
+      if (options.fromDate) params.set("from", options.fromDate);
+      if (options.toDate) params.set("to", options.toDate);
+      params.set("sort", options.sortOrder);
+
+      const res = await fetch(
+        `/api/campaigns/${campaign.id}/leads/export?${params.toString()}`
+      );
 
       if (!res.ok) {
         throw new Error("Failed to export campaign leads");
@@ -498,6 +551,7 @@ export default function CampaignsPage() {
                 filteredCampaigns.map((campaign) => {
                   const isExpanded = expandedCampaignId === campaign.id;
                   const draft = drafts[campaign.id];
+                  const campaignExportOptions = getExportOptions(campaign.id);
 
                   return (
                     <Fragment key={campaign.id}>
@@ -653,26 +707,96 @@ export default function CampaignsPage() {
                                   </div>
 
                                   <div className="mt-5 border-t border-gray-200 pt-5">
-                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="flex flex-col gap-4">
                                       <div>
                                         <div className="text-sm font-medium text-gray-900">
                                           Lead Export
                                         </div>
                                         <div className="mt-1 text-sm text-gray-500">
-                                          Download all leads currently stored for this campaign as a CSV.
+                                          Download campaign leads as a CSV with an optional date range and date sort order.
                                         </div>
                                       </div>
 
-                                      <button
-                                        type="button"
-                                        onClick={() => exportCampaignLeads(campaign)}
-                                        disabled={exportingId === campaign.id}
-                                        className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        {exportingId === campaign.id
-                                          ? "Exporting..."
-                                          : "Export Leads CSV"}
-                                      </button>
+                                      <div className="grid gap-4 md:grid-cols-4">
+                                        <div>
+                                          <label className="mb-2 block text-sm font-medium text-gray-700">
+                                            From
+                                          </label>
+                                          <input
+                                            type="date"
+                                            value={campaignExportOptions.fromDate}
+                                            onChange={(e) =>
+                                              updateExportOptions(
+                                                campaign.id,
+                                                "fromDate",
+                                                e.target.value
+                                              )
+                                            }
+                                            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                          />
+                                        </div>
+
+                                        <div>
+                                          <label className="mb-2 block text-sm font-medium text-gray-700">
+                                            To
+                                          </label>
+                                          <input
+                                            type="date"
+                                            value={campaignExportOptions.toDate}
+                                            onChange={(e) =>
+                                              updateExportOptions(
+                                                campaign.id,
+                                                "toDate",
+                                                e.target.value
+                                              )
+                                            }
+                                            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                          />
+                                        </div>
+
+                                        <div>
+                                          <label className="mb-2 block text-sm font-medium text-gray-700">
+                                            Sort by Date
+                                          </label>
+                                          <select
+                                            value={campaignExportOptions.sortOrder}
+                                            onChange={(e) =>
+                                              updateExportOptions(
+                                                campaign.id,
+                                                "sortOrder",
+                                                e.target.value as "desc" | "asc"
+                                              )
+                                            }
+                                            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                          >
+                                            <option value="desc">Newest first</option>
+                                            <option value="asc">Oldest first</option>
+                                          </select>
+                                        </div>
+
+                                        <div className="flex items-end">
+                                          <button
+                                            type="button"
+                                            onClick={() => clearExportDateRange(campaign.id)}
+                                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                          >
+                                            Clear Dates
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex justify-end">
+                                        <button
+                                          type="button"
+                                          onClick={() => exportCampaignLeads(campaign)}
+                                          disabled={exportingId === campaign.id}
+                                          className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                          {exportingId === campaign.id
+                                            ? "Exporting..."
+                                            : "Export Leads CSV"}
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>

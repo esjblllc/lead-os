@@ -21,6 +21,13 @@ function formatDate(value: Date | string) {
   return new Date(value).toISOString();
 }
 
+function getDateBounds(from?: string | null, to?: string | null) {
+  return {
+    startDate: from ? new Date(`${from}T00:00:00`) : null,
+    endDate: to ? new Date(`${to}T23:59:59.999`) : null,
+  };
+}
+
 function buildFilename(slug: string) {
   const safeSlug = slug.replace(/[^a-z0-9-_]+/gi, "-").replace(/-+/g, "-");
   const date = new Date().toISOString().slice(0, 10);
@@ -36,6 +43,11 @@ export async function GET(req: Request, context: RouteContext) {
     }
 
     const { id } = await context.params;
+    const url = new URL(req.url);
+    const from = url.searchParams.get("from");
+    const to = url.searchParams.get("to");
+    const sort = url.searchParams.get("sort") === "asc" ? "asc" : "desc";
+    const { startDate, endDate } = getDateBounds(from, to);
 
     const campaign = await db.campaign.findUnique({
       where: { id },
@@ -59,7 +71,17 @@ export async function GET(req: Request, context: RouteContext) {
     }
 
     const leads = await db.lead.findMany({
-      where: { campaignId: campaign.id },
+      where: {
+        campaignId: campaign.id,
+        ...(startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate ? { gte: startDate } : {}),
+                ...(endDate ? { lte: endDate } : {}),
+              },
+            }
+          : {}),
+      },
       include: {
         supplier: {
           select: {
@@ -102,7 +124,7 @@ export async function GET(req: Request, context: RouteContext) {
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: sort },
     });
 
     const csv = toCsv(
