@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { generateApiKey } from "@/lib/api-key";
 import { getRequestSessionUser, isPlatformAdmin } from "@/lib/request-session-user";
 
 export async function GET(req: Request) {
@@ -43,15 +44,14 @@ export async function POST(req: Request) {
       email,
       trafficSource,
       defaultCost,
-      apiKey,
       status,
       acceptedVerticals,
       notes,
     } = body;
 
-    if (!name || !apiKey) {
+    if (!name) {
       return Response.json(
-        { error: "name and apiKey are required" },
+        { error: "name is required" },
         { status: 400 }
       );
     }
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
           defaultCost !== ""
             ? Number(defaultCost)
             : null,
-        apiKey,
+        apiKey: generateApiKey(),
         status: status || "active",
         acceptedVerticals,
         notes,
