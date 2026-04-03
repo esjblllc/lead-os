@@ -53,6 +53,7 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [exportingId, setExportingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
@@ -184,8 +185,10 @@ export default function CampaignsPage() {
       });
 
       await fetchCampaigns();
-    } catch (err: any) {
-      setCreateError(err?.message || "Failed to create campaign");
+    } catch (err: unknown) {
+      setCreateError(
+        err instanceof Error ? err.message : "Failed to create campaign"
+      );
     } finally {
       setCreating(false);
     }
@@ -225,6 +228,36 @@ export default function CampaignsPage() {
       console.error("Campaign save error:", err);
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function exportCampaignLeads(campaign: Campaign) {
+    try {
+      setExportingId(campaign.id);
+
+      const res = await fetch(`/api/campaigns/${campaign.id}/leads/export`);
+
+      if (!res.ok) {
+        throw new Error("Failed to export campaign leads");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const contentDisposition = res.headers.get("Content-Disposition") || "";
+      const filenameMatch = contentDisposition.match(/filename="([^"]+)"/i);
+      const filename = filenameMatch?.[1] || `${campaign.slug}-leads.csv`;
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Campaign export error:", err);
+    } finally {
+      setExportingId(null);
     }
   }
 
@@ -617,6 +650,30 @@ export default function CampaignsPage() {
                                         Unsaved changes
                                       </span>
                                     )}
+                                  </div>
+
+                                  <div className="mt-5 border-t border-gray-200 pt-5">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                      <div>
+                                        <div className="text-sm font-medium text-gray-900">
+                                          Lead Export
+                                        </div>
+                                        <div className="mt-1 text-sm text-gray-500">
+                                          Download all leads currently stored for this campaign as a CSV.
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => exportCampaignLeads(campaign)}
+                                        disabled={exportingId === campaign.id}
+                                        className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        {exportingId === campaign.id
+                                          ? "Exporting..."
+                                          : "Export Leads CSV"}
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
