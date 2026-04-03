@@ -94,6 +94,9 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [savedNoticeById, setSavedNoticeById] = useState<Record<string, string>>(
+    {}
+  );
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -402,6 +405,22 @@ export default function CampaignsPage() {
     );
   }
 
+  function showSavedNotice(campaignId: string, message: string) {
+    setSavedNoticeById((prev) => ({
+      ...prev,
+      [campaignId]: message,
+    }));
+
+    window.setTimeout(() => {
+      setSavedNoticeById((prev) => {
+        if (prev[campaignId] !== message) return prev;
+        const next = { ...prev };
+        delete next[campaignId];
+        return next;
+      });
+    }, 2500);
+  }
+
   async function createCampaign(e: React.FormEvent) {
     e.preventDefault();
     setCreateError("");
@@ -473,7 +492,7 @@ export default function CampaignsPage() {
     }
   }
 
-  async function saveCampaign(id: string) {
+  async function saveCampaign(id: string, successMessage = "Campaign saved.") {
     const draft = drafts[id];
     if (!draft) return;
 
@@ -507,6 +526,7 @@ export default function CampaignsPage() {
       }
 
       await fetchCampaigns();
+      showSavedNotice(id, successMessage);
     } catch (err) {
       console.error("Campaign save error:", err);
     } finally {
@@ -1001,6 +1021,7 @@ export default function CampaignsPage() {
                   const isExpanded = expandedCampaignId === campaign.id;
                   const draft = drafts[campaign.id];
                   const campaignExportOptions = getExportOptions(campaign.id);
+                  const savedNotice = savedNoticeById[campaign.id];
 
                   return (
                     <Fragment key={campaign.id}>
@@ -1050,6 +1071,22 @@ export default function CampaignsPage() {
                                 </h3>
 
                                 <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                                  {savedNotice ? (
+                                    <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+                                      {savedNotice}
+                                    </div>
+                                  ) : null}
+
+                                  <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
+                                    <div className="mb-4">
+                                      <div className="text-sm font-semibold text-gray-900">
+                                        Campaign Details
+                                      </div>
+                                      <div className="mt-1 text-sm text-gray-500">
+                                        Core campaign settings and routing behavior.
+                                      </div>
+                                    </div>
+
                                   <div className="grid gap-4 md:grid-cols-2">
                                     <div>
                                       <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -1138,8 +1175,9 @@ export default function CampaignsPage() {
                                       </select>
                                     </div>
                                   </div>
+                                  </div>
 
-                                  <div className="mt-5 border-t border-gray-200 pt-5">
+                                  <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
                                     <div className="text-sm font-medium text-gray-900">
                                       Publisher Spec Settings
                                     </div>
@@ -1350,7 +1388,12 @@ export default function CampaignsPage() {
                                         </button>
                                         <button
                                           type="button"
-                                          onClick={() => saveCampaign(campaign.id)}
+                                          onClick={() =>
+                                            saveCampaign(
+                                              campaign.id,
+                                              "Publisher spec saved."
+                                            )
+                                          }
                                           disabled={
                                             !isDirty(campaign) ||
                                             savingId === campaign.id
@@ -1385,7 +1428,9 @@ export default function CampaignsPage() {
 
                                   <div className="mt-5 flex items-center gap-3">
                                     <button
-                                      onClick={() => saveCampaign(campaign.id)}
+                                      onClick={() =>
+                                        saveCampaign(campaign.id, "Campaign details saved.")
+                                      }
                                       disabled={!isDirty(campaign) || savingId === campaign.id}
                                       className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                                     >
@@ -1399,10 +1444,10 @@ export default function CampaignsPage() {
                                     )}
                                   </div>
 
-                                  <div className="mt-5 border-t border-gray-200 pt-5">
+                                  <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
                                     <div className="flex flex-col gap-4">
                                       <div>
-                                        <div className="text-sm font-medium text-gray-900">
+                                        <div className="text-sm font-semibold text-gray-900">
                                           Lead Export
                                         </div>
                                         <div className="mt-1 text-sm text-gray-500">
