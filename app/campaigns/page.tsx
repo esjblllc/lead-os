@@ -779,7 +779,7 @@ export default function CampaignsPage() {
                       getCustomFields(newCampaign.customInboundFields).map(
                         (field, index) => (
                           <div
-                            key={`${field.key || "new"}-${index}`}
+                            key={`new-custom-field-${index}`}
                             className="rounded-xl border border-gray-200 bg-gray-50 p-4"
                           >
                             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -1202,7 +1202,7 @@ export default function CampaignsPage() {
                                             draft?.customInboundFields || "[]"
                                           ).map((field, index) => (
                                             <div
-                                              key={`${field.key || "draft"}-${index}`}
+                                              key={`draft-custom-field-${campaign.id}-${index}`}
                                               className="rounded-xl border border-gray-200 bg-gray-50 p-4"
                                             >
                                               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
