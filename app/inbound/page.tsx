@@ -159,6 +159,86 @@ export default async function InboundPage({
         </form>
       </div>
 
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-6 shadow-sm">
+          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">
+            Publisher Handoff
+          </div>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight text-gray-900">
+            Share the live posting spec with your publisher
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-600">
+            RouteIQ builds a campaign-specific posting guide from the supplier,
+            campaign, and field settings you configured. Open it in a new tab
+            or send the link directly to the publisher.
+          </p>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-blue-200 bg-white p-4">
+              <div className="text-sm font-semibold text-gray-900">1. Choose source</div>
+              <div className="mt-1 text-sm text-gray-600">
+                Pick the supplier and campaign pair you want to document.
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-blue-200 bg-white p-4">
+              <div className="text-sm font-semibold text-gray-900">2. Review fields</div>
+              <div className="mt-1 text-sm text-gray-600">
+                Confirm the built-in and custom fields that are required.
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-blue-200 bg-white p-4">
+              <div className="text-sm font-semibold text-gray-900">3. Send spec</div>
+              <div className="mt-1 text-sm text-gray-600">
+                Share the generated publisher page and they can post immediately.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="text-sm font-semibold text-gray-900">Shareable Publisher Spec</div>
+          <div className="mt-2 text-sm text-gray-500">
+            This is the URL you can hand to the publisher for this exact supplier and campaign.
+          </div>
+
+          {publisherSpecLink ? (
+            <>
+              <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-gray-500">
+                  Live Spec URL
+                </div>
+                <pre className="mt-2 whitespace-pre-wrap break-all text-xs text-gray-700">
+                  {publisherSpecLink}
+                </pre>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Link
+                  href={publisherSpecLink}
+                  target="_blank"
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Open Publisher Spec
+                </Link>
+
+                <Link
+                  href={`/campaigns`}
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Edit Campaign Fields
+                </Link>
+              </div>
+            </>
+          ) : (
+            <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
+              Select an active supplier and campaign to generate a shareable publisher spec.
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="rounded-xl border bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold">Supplier Summary</h2>
@@ -197,7 +277,7 @@ export default async function InboundPage({
       </div>
 
       <div className="rounded-xl border bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold">Endpoint</h2>
+        <h2 className="text-lg font-semibold">Endpoint Setup</h2>
         <div className="mt-4 space-y-3 text-sm">
           <div>
             <div className="font-medium">Relative Endpoint</div>
@@ -212,27 +292,14 @@ export default async function InboundPage({
               {`x-api-key: ${apiKey}`}
             </pre>
           </div>
-
-          {publisherSpecLink ? (
-            <div>
-              <div className="font-medium">Shareable Publisher Spec</div>
-              <pre className="mt-1 whitespace-pre-wrap break-all rounded-lg bg-gray-50 p-3 text-xs">
-                {publisherSpecLink}
-              </pre>
-              <Link
-                href={publisherSpecLink}
-                target="_blank"
-                className="mt-3 inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-              >
-                Open Publisher Spec
-              </Link>
-            </div>
-          ) : null}
         </div>
       </div>
 
       <div className="rounded-xl border bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold">Campaign Field Requirements</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          These are the fields the publisher should send for the currently selected campaign.
+        </p>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-gray-50 text-gray-500">
@@ -266,7 +333,10 @@ export default async function InboundPage({
 
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="rounded-xl border bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold">Sample Payload</h2>
+          <h2 className="text-lg font-semibold">Recommended Payload</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            This example matches the selected campaign field configuration exactly.
+          </p>
           <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-xs">
             {prettifyJson(samplePayload)}
           </pre>
@@ -274,6 +344,9 @@ export default async function InboundPage({
 
         <div className="rounded-xl border bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold">Sample Payload with Explicit Cost</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Use this version only if the publisher should override the supplier default cost.
+          </p>
           <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-xs">
             {prettifyJson(samplePayloadWithCost)}
           </pre>
@@ -299,6 +372,9 @@ export default async function InboundPage({
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="rounded-xl border bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold">Success Response Example</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            A successful post returns a RouteIQ lead id and routing status.
+          </p>
           <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-xs">
             {prettifyJson(successResponse)}
           </pre>
@@ -306,6 +382,9 @@ export default async function InboundPage({
 
         <div className="rounded-xl border bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold">Error Response Example</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Invalid keys or missing required fields return a structured error.
+          </p>
           <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-xs">
             {prettifyJson(errorResponse)}
           </pre>
