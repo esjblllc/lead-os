@@ -1,5 +1,10 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { db } from "@/lib/db";
+import {
+  buildInboundFieldSelection,
+  buildInboundSamplePayload,
+} from "@/lib/inbound-spec";
 
 type SearchParams = {
   supplierId?: string;
@@ -16,6 +21,10 @@ export default async function InboundPage({
   searchParams?: Promise<SearchParams>;
 }) {
   const params = (await searchParams) || {};
+  const headerStore = await headers();
+  const origin = `${
+    headerStore.get("x-forwarded-proto") || "https"
+  }://${headerStore.get("host") || "localhost:3000"}`;
 
   const [suppliers, campaigns] = await Promise.all([
     db.supplier.findMany({
@@ -38,32 +47,34 @@ export default async function InboundPage({
   const endpointPath = "/api/inbound/leads";
   const campaignSlug = selectedCampaign?.slug || "your-campaign-slug";
   const apiKey = selectedSupplier?.apiKey || "PASTE_SUPPLIER_API_KEY_HERE";
-  const trafficSource = selectedSupplier?.trafficSource || "facebook";
-
-  const samplePayload = {
+  const samplePayload = buildInboundSamplePayload({
     campaignSlug,
-    firstName: "John",
-    lastName: "Doe",
-    email: "john@example.com",
-    phone: "5551234567",
-    state: "NY",
-    zip: "11746",
-    source: trafficSource,
-    subId: "sub_123",
-    publisherId: "pub_123",
-  };
+    source: selectedSupplier?.trafficSource || "facebook",
+    requiredFields: selectedCampaign?.inboundRequiredFields,
+    optionalFields: selectedCampaign?.inboundOptionalFields,
+  });
 
   const samplePayloadWithCost = {
     ...samplePayload,
     cost: 12.5,
   };
 
-  const curlExample = `curl -X POST "http://localhost:3000${endpointPath}" \\
+  const publisherSpecLink =
+    selectedSupplier && selectedCampaign
+      ? `${origin}/publisher-specs/${selectedCampaign.slug}?supplierId=${selectedSupplier.id}`
+      : "";
+
+  const fieldSelection = buildInboundFieldSelection({
+    requiredFields: selectedCampaign?.inboundRequiredFields,
+    optionalFields: selectedCampaign?.inboundOptionalFields,
+  }).filter((field) => field.status !== "hidden");
+
+  const curlExample = `curl -X POST "${origin}${endpointPath}" \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: ${apiKey}" \\
   -d '${JSON.stringify(samplePayload)}'`;
 
-  const powershellExample = `Invoke-RestMethod -Uri "http://localhost:3000${endpointPath}" \`
+  const powershellExample = `Invoke-RestMethod -Uri "${origin}${endpointPath}" \`
   -Method POST \`
   -Headers @{ "x-api-key" = "${apiKey}" } \`
   -ContentType "application/json" \`
@@ -199,6 +210,55 @@ export default async function InboundPage({
               {`x-api-key: ${apiKey}`}
             </pre>
           </div>
+
+          {publisherSpecLink ? (
+            <div>
+              <div className="font-medium">Shareable Publisher Spec</div>
+              <pre className="mt-1 whitespace-pre-wrap break-all rounded-lg bg-gray-50 p-3 text-xs">
+                {publisherSpecLink}
+              </pre>
+              <Link
+                href={publisherSpecLink}
+                target="_blank"
+                className="mt-3 inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+              >
+                Open Publisher Spec
+              </Link>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold">Campaign Field Requirements</h2>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-500">
+              <tr>
+                <th className="px-4 py-3 font-medium">Field</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-gray-100">
+                <td className="px-4 py-3 font-medium">campaignSlug</td>
+                <td className="px-4 py-3">Required</td>
+                <td className="px-4 py-3">
+                  Always required to target the campaign.
+                </td>
+              </tr>
+              {fieldSelection.map((field) => (
+                <tr key={field.key} className="border-t border-gray-100">
+                  <td className="px-4 py-3 font-medium">{field.key}</td>
+                  <td className="px-4 py-3">
+                    {field.status === "required" ? "Required" : "Optional"}
+                  </td>
+                  <td className="px-4 py-3">{field.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

@@ -122,6 +122,9 @@ model Campaign {
   vertical       String
   routingMode    String   @default("direct_post")
   status         String
+  inboundRequiredFields String?
+  inboundOptionalFields String?
+  publisherSpecNotes String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

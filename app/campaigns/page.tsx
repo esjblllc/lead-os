@@ -1,6 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
+import {
+  INBOUND_FIELD_DEFINITIONS,
+  parseInboundFieldList,
+} from "@/lib/inbound-spec";
 
 type Campaign = {
   id: string;
@@ -10,6 +14,9 @@ type Campaign = {
   vertical: string;
   routingMode: string;
   status: string;
+  inboundRequiredFields?: string | null;
+  inboundOptionalFields?: string | null;
+  publisherSpecNotes?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -20,21 +27,33 @@ type CampaignDraft = {
   vertical: string;
   routingMode: string;
   status: string;
+  inboundRequiredFields: string;
+  inboundOptionalFields: string;
+  publisherSpecNotes: string;
 };
 
-type NewCampaignForm = {
-  name: string;
-  slug: string;
-  vertical: string;
-  routingMode: string;
-  status: string;
-};
+type NewCampaignForm = CampaignDraft;
 
 type CampaignExportOptions = {
   fromDate: string;
   toDate: string;
   sortOrder: "desc" | "asc";
 };
+
+type FieldStatus = "hidden" | "optional" | "required";
+
+const DEFAULT_OPTIONAL_FIELDS = [
+  "firstName",
+  "lastName",
+  "email",
+  "phone",
+  "state",
+  "zip",
+].join(",");
+
+function serializeFieldSet(values: Set<string>) {
+  return Array.from(values).join(",");
+}
 
 function normalize(value: unknown) {
   return value === null || typeof value === "undefined" ? "" : String(value);
@@ -79,6 +98,9 @@ export default function CampaignsPage() {
     vertical: "",
     routingMode: "direct_post",
     status: "active",
+    inboundRequiredFields: "",
+    inboundOptionalFields: DEFAULT_OPTIONAL_FIELDS,
+    publisherSpecNotes: "",
   });
 
   function slugify(value: string) {
@@ -104,6 +126,9 @@ export default function CampaignsPage() {
         vertical: campaign.vertical || "",
         routingMode: campaign.routingMode || "direct_post",
         status: campaign.status || "active",
+        inboundRequiredFields: campaign.inboundRequiredFields || "",
+        inboundOptionalFields: campaign.inboundOptionalFields || "",
+        publisherSpecNotes: campaign.publisherSpecNotes || "",
       };
     });
 
@@ -175,6 +200,80 @@ export default function CampaignsPage() {
     });
   }
 
+  function getFieldStatus(
+    requiredValue: string,
+    optionalValue: string,
+    fieldKey: string
+  ): FieldStatus {
+    const required = new Set(parseInboundFieldList(requiredValue));
+    if (required.has(fieldKey as never)) return "required";
+
+    const optional = new Set(parseInboundFieldList(optionalValue));
+    if (optional.has(fieldKey as never)) return "optional";
+
+    return "hidden";
+  }
+
+  function applyFieldStatus(
+    requiredValue: string,
+    optionalValue: string,
+    fieldKey: string,
+    status: FieldStatus
+  ) {
+    const required = new Set(parseInboundFieldList(requiredValue));
+    const optional = new Set(parseInboundFieldList(optionalValue));
+
+    required.delete(fieldKey as never);
+    optional.delete(fieldKey as never);
+
+    if (status === "required") {
+      required.add(fieldKey as never);
+    } else if (status === "optional") {
+      optional.add(fieldKey as never);
+    }
+
+    return {
+      inboundRequiredFields: serializeFieldSet(required),
+      inboundOptionalFields: serializeFieldSet(optional),
+    };
+  }
+
+  function setNewFieldStatus(fieldKey: string, status: FieldStatus) {
+    setNewCampaign((prev) => ({
+      ...prev,
+      ...applyFieldStatus(
+        prev.inboundRequiredFields,
+        prev.inboundOptionalFields,
+        fieldKey,
+        status
+      ),
+    }));
+  }
+
+  function setDraftFieldStatus(
+    campaignId: string,
+    fieldKey: string,
+    status: FieldStatus
+  ) {
+    setDrafts((prev) => {
+      const current = prev[campaignId];
+      if (!current) return prev;
+
+      return {
+        ...prev,
+        [campaignId]: {
+          ...current,
+          ...applyFieldStatus(
+            current.inboundRequiredFields,
+            current.inboundOptionalFields,
+            fieldKey,
+            status
+          ),
+        },
+      };
+    });
+  }
+
   async function createCampaign(e: React.FormEvent) {
     e.preventDefault();
     setCreateError("");
@@ -209,6 +308,9 @@ export default function CampaignsPage() {
           vertical: newCampaign.vertical,
           routingMode: newCampaign.routingMode,
           status: newCampaign.status,
+          inboundRequiredFields: newCampaign.inboundRequiredFields,
+          inboundOptionalFields: newCampaign.inboundOptionalFields,
+          publisherSpecNotes: newCampaign.publisherSpecNotes,
         }),
       });
 
@@ -226,6 +328,9 @@ export default function CampaignsPage() {
         vertical: "",
         routingMode: "direct_post",
         status: "active",
+        inboundRequiredFields: "",
+        inboundOptionalFields: DEFAULT_OPTIONAL_FIELDS,
+        publisherSpecNotes: "",
       });
 
       await fetchCampaigns();
@@ -260,6 +365,9 @@ export default function CampaignsPage() {
           vertical: draft.vertical,
           routingMode: draft.routingMode,
           status: draft.status,
+          inboundRequiredFields: draft.inboundRequiredFields,
+          inboundOptionalFields: draft.inboundOptionalFields,
+          publisherSpecNotes: draft.publisherSpecNotes,
         }),
       });
 
@@ -323,7 +431,10 @@ export default function CampaignsPage() {
       draft.slug !== normalize(campaign.slug) ||
       draft.vertical !== normalize(campaign.vertical) ||
       draft.routingMode !== normalize(campaign.routingMode || "direct_post") ||
-      draft.status !== normalize(campaign.status)
+      draft.status !== normalize(campaign.status) ||
+      draft.inboundRequiredFields !== normalize(campaign.inboundRequiredFields) ||
+      draft.inboundOptionalFields !== normalize(campaign.inboundOptionalFields) ||
+      draft.publisherSpecNotes !== normalize(campaign.publisherSpecNotes)
     );
   }
 
@@ -458,6 +569,69 @@ export default function CampaignsPage() {
                   <option value="active">active</option>
                   <option value="paused">paused</option>
                 </select>
+              </div>
+
+              <div className="md:col-span-5 rounded-2xl border border-gray-200 bg-white p-4">
+                <div className="text-sm font-semibold text-gray-900">
+                  Publisher Spec Fields
+                </div>
+                <div className="mt-1 text-sm text-gray-500">
+                  `campaignSlug` is always required. Everything below controls the rest of the inbound payload for this campaign.
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {INBOUND_FIELD_DEFINITIONS.map((field) => (
+                    <div
+                      key={field.key}
+                      className="rounded-xl border border-gray-200 bg-gray-50 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {field.label}
+                          </div>
+                          <div className="mt-1 text-xs text-gray-500">
+                            {field.description}
+                          </div>
+                        </div>
+
+                        <select
+                          value={getFieldStatus(
+                            newCampaign.inboundRequiredFields,
+                            newCampaign.inboundOptionalFields,
+                            field.key
+                          )}
+                          onChange={(e) =>
+                            setNewFieldStatus(
+                              field.key,
+                              e.target.value as FieldStatus
+                            )
+                          }
+                          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                        >
+                          <option value="hidden">Hidden</option>
+                          <option value="optional">Optional</option>
+                          <option value="required">Required</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4">
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Publisher Notes
+                  </label>
+                  <textarea
+                    value={newCampaign.publisherSpecNotes}
+                    onChange={(e) =>
+                      updateNewCampaign("publisherSpecNotes", e.target.value)
+                    }
+                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                    rows={3}
+                    placeholder="Example: Collect only consumer PII. Do not send diagnosis details in the initial post."
+                  />
+                </div>
               </div>
             </div>
 
@@ -690,6 +864,73 @@ export default function CampaignsPage() {
                                     </div>
                                   </div>
 
+                                  <div className="mt-5 border-t border-gray-200 pt-5">
+                                    <div className="text-sm font-medium text-gray-900">
+                                      Publisher Spec Settings
+                                    </div>
+                                    <div className="mt-1 text-sm text-gray-500">
+                                      Set which inbound fields are visible to publishers for this campaign.
+                                    </div>
+
+                                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                      {INBOUND_FIELD_DEFINITIONS.map((field) => (
+                                        <div
+                                          key={field.key}
+                                          className="rounded-xl border border-gray-200 bg-gray-50 p-3"
+                                        >
+                                          <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                              <div className="text-sm font-medium text-gray-900">
+                                                {field.label}
+                                              </div>
+                                              <div className="mt-1 text-xs text-gray-500">
+                                                {field.description}
+                                              </div>
+                                            </div>
+
+                                            <select
+                                              value={getFieldStatus(
+                                                draft?.inboundRequiredFields || "",
+                                                draft?.inboundOptionalFields || "",
+                                                field.key
+                                              )}
+                                              onChange={(e) =>
+                                                setDraftFieldStatus(
+                                                  campaign.id,
+                                                  field.key,
+                                                  e.target.value as FieldStatus
+                                                )
+                                              }
+                                              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                                            >
+                                              <option value="hidden">Hidden</option>
+                                              <option value="optional">Optional</option>
+                                              <option value="required">Required</option>
+                                            </select>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    <div className="mt-4">
+                                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                                        Publisher Notes
+                                      </label>
+                                      <textarea
+                                        value={draft?.publisherSpecNotes || ""}
+                                        onChange={(e) =>
+                                          updateDraft(
+                                            campaign.id,
+                                            "publisherSpecNotes",
+                                            e.target.value
+                                          )
+                                        }
+                                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                        rows={3}
+                                      />
+                                    </div>
+                                  </div>
+
                                   <div className="mt-5 flex items-center gap-3">
                                     <button
                                       onClick={() => saveCampaign(campaign.id)}
@@ -844,6 +1085,21 @@ export default function CampaignsPage() {
                                       <div className="mt-2 font-mono">
                                         {`"campaignSlug": "${draft?.slug || campaign.slug}"`}
                                       </div>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <div className="font-medium text-gray-800">Publisher Fields</div>
+                                    <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700">
+                                      Required:{" "}
+                                      {parseInboundFieldList(
+                                        draft?.inboundRequiredFields || ""
+                                      ).join(", ") || "none"}
+                                      <br />
+                                      Optional:{" "}
+                                      {parseInboundFieldList(
+                                        draft?.inboundOptionalFields || ""
+                                      ).join(", ") || "none"}
                                     </div>
                                   </div>
                                 </div>

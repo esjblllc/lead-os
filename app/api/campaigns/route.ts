@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { getRequestSessionUser, isPlatformAdmin } from "@/lib/request-session-user";
+import { normalizeInboundFieldList } from "@/lib/inbound-spec";
 
 export async function GET(req: Request) {
   try {
@@ -36,7 +37,16 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { name, slug, vertical, routingMode, status } = body;
+    const {
+      name,
+      slug,
+      vertical,
+      routingMode,
+      status,
+      inboundRequiredFields,
+      inboundOptionalFields,
+      publisherSpecNotes,
+    } = body;
 
     if (!name || !slug || !vertical) {
       return Response.json(
@@ -53,6 +63,9 @@ export async function POST(req: Request) {
         vertical,
         routingMode: routingMode || "direct_post",
         status: status || "active",
+        inboundRequiredFields: normalizeInboundFieldList(inboundRequiredFields),
+        inboundOptionalFields: normalizeInboundFieldList(inboundOptionalFields),
+        publisherSpecNotes: publisherSpecNotes || null,
       },
     });
 

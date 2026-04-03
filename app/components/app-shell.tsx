@@ -26,7 +26,8 @@ export default function AppShell({
     pathname === "/" ||
     pathname === "/login" ||
     pathname === "/select-suite" ||
-    pathname.startsWith("/invite");
+    pathname.startsWith("/invite") ||
+    pathname.startsWith("/publisher-specs/");
 
   const isTrackingSuite = pathname === "/tracking" || pathname.startsWith("/tracking/");
 

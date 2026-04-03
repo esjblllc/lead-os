@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { parseBuyerResponse } from "@/lib/buyer-response";
+import { parseInboundFieldList } from "@/lib/inbound-spec";
 
 type BuyerForRouting = {
   id: string;
@@ -588,6 +589,22 @@ export async function POST(req: NextRequest) {
       return Response.json(
         { error: "Supplier not authorized for this campaign" },
         { status: 403 }
+      );
+    }
+
+    const missingRequiredFields = parseInboundFieldList(
+      campaign.inboundRequiredFields
+    ).filter((field) => {
+      const value = body[field];
+      return value === null || typeof value === "undefined" || value === "";
+    });
+
+    if (missingRequiredFields.length > 0) {
+      return Response.json(
+        {
+          error: `Missing required fields: ${missingRequiredFields.join(", ")}`,
+        },
+        { status: 400 }
       );
     }
 

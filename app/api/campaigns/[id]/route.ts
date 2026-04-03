@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { getRequestSessionUser, isPlatformAdmin } from "@/lib/request-session-user";
+import { normalizeInboundFieldList } from "@/lib/inbound-spec";
 
 type RouteContext = {
   params: Promise<{
@@ -43,6 +44,23 @@ export async function PATCH(req: Request, context: RouteContext) {
           ? { routingMode: body.routingMode }
           : {}),
         ...(typeof body.status !== "undefined" ? { status: body.status } : {}),
+        ...(typeof body.inboundRequiredFields !== "undefined"
+          ? {
+              inboundRequiredFields: normalizeInboundFieldList(
+                body.inboundRequiredFields
+              ),
+            }
+          : {}),
+        ...(typeof body.inboundOptionalFields !== "undefined"
+          ? {
+              inboundOptionalFields: normalizeInboundFieldList(
+                body.inboundOptionalFields
+              ),
+            }
+          : {}),
+        ...(typeof body.publisherSpecNotes !== "undefined"
+          ? { publisherSpecNotes: body.publisherSpecNotes || null }
+          : {}),
       },
     });
 
