@@ -101,6 +101,7 @@ export default function CampaignsPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
+  const [isNewCampaignOpen, setIsNewCampaignOpen] = useState(false);
   const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, CampaignDraft>>({});
   const [exportOptions, setExportOptions] = useState<
@@ -469,6 +470,7 @@ export default function CampaignsPage() {
       }
 
       setCreateSuccess("Campaign created successfully.");
+      setIsNewCampaignOpen(false);
 
       setNewCampaign({
         name: "",
@@ -631,9 +633,49 @@ export default function CampaignsPage() {
         </div>
 
         <div className="p-6">
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  New Campaign
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Create a new campaign when you need a fresh slug, routing setup, and publisher spec.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsNewCampaignOpen((prev) => !prev)}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+              >
+                {isNewCampaignOpen ? "Hide New Campaign" : "Open New Campaign"}
+              </button>
+            </div>
+
+            {!isNewCampaignOpen ? (
+              <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-white px-4 py-3 text-sm text-gray-500">
+                The new campaign form is collapsed to keep this page cleaner. Open it when you are ready to create a campaign.
+              </div>
+            ) : null}
+
+            {createError ? (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {createError}
+              </div>
+            ) : null}
+
+            {createSuccess ? (
+              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                {createSuccess}
+              </div>
+            ) : null}
+          </div>
+
+          {isNewCampaignOpen ? (
           <form
             onSubmit={createCampaign}
-            className="rounded-2xl border border-gray-200 bg-gray-50 p-5"
+            className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-5"
           >
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -930,18 +972,8 @@ export default function CampaignsPage() {
               </div>
             </div>
 
-            {createError ? (
-              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {createError}
-              </div>
-            ) : null}
-
-            {createSuccess ? (
-              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-                {createSuccess}
-              </div>
-            ) : null}
           </form>
+          ) : null}
 
           <div className="mt-6 grid gap-4 md:grid-cols-4 xl:grid-cols-6">
             <div className="md:col-span-2 xl:col-span-3">
