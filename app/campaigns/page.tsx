@@ -874,6 +874,23 @@ export default function CampaignsPage() {
                       )
                     )}
                   </div>
+
+                  <div className="mt-4 flex flex-wrap justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={addNewCustomField}
+                      className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Add Another Field
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={creating}
+                      className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                      {creating ? "Creating..." : "Create Campaign"}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-4">
@@ -1321,6 +1338,29 @@ export default function CampaignsPage() {
                                             </div>
                                           ))
                                         )}
+                                      </div>
+
+                                      <div className="mt-4 flex flex-wrap justify-end gap-3">
+                                        <button
+                                          type="button"
+                                          onClick={() => addDraftCustomField(campaign.id)}
+                                          className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                        >
+                                          Add Another Field
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => saveCampaign(campaign.id)}
+                                          disabled={
+                                            !isDirty(campaign) ||
+                                            savingId === campaign.id
+                                          }
+                                          className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                          {savingId === campaign.id
+                                            ? "Saving..."
+                                            : "Save Custom Fields"}
+                                        </button>
                                       </div>
                                     </div>
 
