@@ -109,6 +109,7 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -258,6 +259,46 @@ export default function LeadsPage() {
     setToDate("");
   }
 
+  async function exportVisibleLeads() {
+    try {
+      setExporting(true);
+
+      const params = new URLSearchParams();
+      if (search.trim()) params.set("q", search.trim());
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (buyerFilter !== "all") params.set("buyerId", buyerFilter);
+      if (campaignFilter !== "all") params.set("campaignId", campaignFilter);
+      if (supplierFilter !== "all") params.set("supplierId", supplierFilter);
+      if (dateRange !== "all") params.set("range", dateRange);
+      if (fromDate) params.set("from", fromDate);
+      if (toDate) params.set("to", toDate);
+
+      const res = await fetch(`/api/leads/export?${params.toString()}`);
+
+      if (!res.ok) {
+        throw new Error("Failed to export leads");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const contentDisposition = res.headers.get("Content-Disposition") || "";
+      const filenameMatch = contentDisposition.match(/filename="([^"]+)"/i);
+      const filename = filenameMatch?.[1] || "leads-export.csv";
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Leads export error:", err);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const summary = useMemo(() => {
     const total = filteredLeads.length;
     const assigned = filteredLeads.filter((lead) => lead.routingStatus === "assigned").length;
@@ -292,6 +333,14 @@ export default function LeadsPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={exportVisibleLeads}
+                disabled={exporting}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {exporting ? "Exporting..." : "Export Visible Leads CSV"}
+              </button>
               {[
                 { key: "all", label: "All Time" },
                 { key: "24h", label: "Last 24h" },
