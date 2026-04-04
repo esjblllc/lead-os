@@ -55,6 +55,31 @@ type Lead = {
   pingResults: PingResult[];
 };
 
+type LeadSortOption =
+  | "created_desc"
+  | "created_asc"
+  | "revenue_desc"
+  | "profit_desc"
+  | "margin_desc";
+
+type SavedLeadView = {
+  id: string;
+  name: string;
+  filters: {
+    search: string;
+    statusFilter: string;
+    buyerFilter: string;
+    campaignFilter: string;
+    supplierFilter: string;
+    dateRange: string;
+    fromDate: string;
+    toDate: string;
+    sortBy: LeadSortOption;
+  };
+};
+
+const LEAD_VIEWS_STORAGE_KEY = "lead-os.leads.saved-views";
+
 function getPresetStartDate(range: string) {
   const now = new Date();
 
@@ -112,6 +137,8 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [sortBy, setSortBy] = useState<LeadSortOption>("created_desc");
+  const [savedViews, setSavedViews] = useState<SavedLeadView[]>([]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -143,6 +170,27 @@ export default function LeadsPage() {
   useEffect(() => {
     fetchLeads();
   }, []);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(LEAD_VIEWS_STORAGE_KEY);
+      if (!stored) return;
+
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setSavedViews(parsed as SavedLeadView[]);
+      }
+    } catch (error) {
+      console.error("Saved lead views load error:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      LEAD_VIEWS_STORAGE_KEY,
+      JSON.stringify(savedViews)
+    );
+  }, [savedViews]);
 
   const buyerOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -238,6 +286,36 @@ export default function LeadsPage() {
     toDate,
   ]);
 
+  const sortedLeads = useMemo(() => {
+    const items = [...filteredLeads];
+
+    items.sort((left, right) => {
+      if (sortBy === "created_asc") {
+        return (
+          new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+        );
+      }
+
+      if (sortBy === "revenue_desc") {
+        return (getRevenue(right) || 0) - (getRevenue(left) || 0);
+      }
+
+      if (sortBy === "profit_desc") {
+        return (getProfit(right) || 0) - (getProfit(left) || 0);
+      }
+
+      if (sortBy === "margin_desc") {
+        return (getMarginPct(right) || 0) - (getMarginPct(left) || 0);
+      }
+
+      return (
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+      );
+    });
+
+    return items;
+  }, [filteredLeads, sortBy]);
+
   function getRevenue(lead: Lead) {
     return toNumber(lead.assignedBuyer?.pricePerLead);
   }
@@ -275,6 +353,65 @@ export default function LeadsPage() {
     setDateRange("all");
     setFromDate("");
     setToDate("");
+    setSortBy("created_desc");
+  }
+
+  function captureCurrentView(): SavedLeadView["filters"] {
+    return {
+      search,
+      statusFilter,
+      buyerFilter,
+      campaignFilter,
+      supplierFilter,
+      dateRange,
+      fromDate,
+      toDate,
+      sortBy,
+    };
+  }
+
+  function applySavedView(view: SavedLeadView) {
+    setSearch(view.filters.search);
+    setStatusFilter(view.filters.statusFilter);
+    setBuyerFilter(view.filters.buyerFilter);
+    setCampaignFilter(view.filters.campaignFilter);
+    setSupplierFilter(view.filters.supplierFilter);
+    setDateRange(view.filters.dateRange);
+    setFromDate(view.filters.fromDate);
+    setToDate(view.filters.toDate);
+    setSortBy(view.filters.sortBy);
+
+    toast({
+      title: "Saved view loaded",
+      description: `${view.name} is now active.`,
+      variant: "success",
+    });
+  }
+
+  function saveCurrentView() {
+    const name = window.prompt("Name this saved lead view:");
+    if (!name || !name.trim()) return;
+
+    const nextView: SavedLeadView = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: name.trim(),
+      filters: captureCurrentView(),
+    };
+
+    setSavedViews((prev) => [nextView, ...prev]);
+    toast({
+      title: "Saved view created",
+      description: `${nextView.name} is available from this page now.`,
+      variant: "success",
+    });
+  }
+
+  function deleteSavedView(id: string) {
+    setSavedViews((prev) => prev.filter((view) => view.id !== id));
+    toast({
+      title: "Saved view removed",
+      variant: "info",
+    });
   }
 
   async function exportVisibleLeads() {
@@ -290,6 +427,7 @@ export default function LeadsPage() {
       if (dateRange !== "all") params.set("range", dateRange);
       if (fromDate) params.set("from", fromDate);
       if (toDate) params.set("to", toDate);
+      params.set("sort", sortBy);
 
       const res = await fetch(`/api/leads/export?${params.toString()}`);
 
@@ -460,7 +598,7 @@ export default function LeadsPage() {
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
                 <div className="font-semibold">Current View</div>
                 <div className="mt-1">
-                  Showing {filteredLeads.length} of {leads.length} leads
+                  Showing {sortedLeads.length} of {leads.length} leads
                   {hasActiveFilters ? " with filters applied." : "."}
                 </div>
               </div>
@@ -490,7 +628,42 @@ export default function LeadsPage() {
                   Clear Custom Dates
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={saveCurrentView}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+              >
+                Save Current View
+              </button>
             </div>
+
+            {savedViews.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {savedViews.map((view) => (
+                  <div
+                    key={view.id}
+                    className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => applySavedView(view)}
+                      className="text-sm font-medium text-gray-800 hover:text-blue-700"
+                    >
+                      {view.name}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => deleteSavedView(view.id)}
+                      className="rounded-lg px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
@@ -618,7 +791,24 @@ export default function LeadsPage() {
               </button>
             </div>
 
-            <div className="flex items-end text-sm text-gray-500 md:col-span-2 xl:col-span-3">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Sort Leads
+              </label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as LeadSortOption)}
+                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="created_desc">Newest first</option>
+                <option value="created_asc">Oldest first</option>
+                <option value="revenue_desc">Highest revenue</option>
+                <option value="profit_desc">Highest profit</option>
+                <option value="margin_desc">Highest margin %</option>
+              </select>
+            </div>
+
+            <div className="flex items-end text-sm text-gray-500 md:col-span-1 xl:col-span-2">
               Export always uses the same filters you see on screen.
             </div>
           </div>
@@ -649,14 +839,14 @@ export default function LeadsPage() {
             </thead>
 
             <tbody>
-              {filteredLeads.length === 0 ? (
+              {sortedLeads.length === 0 ? (
                 <tr>
                   <td colSpan={15} className="px-4 py-12 text-center text-gray-500">
                     No leads found.
                   </td>
                 </tr>
               ) : (
-                filteredLeads.map((lead) => {
+                sortedLeads.map((lead) => {
                   const revenue = getRevenue(lead);
                   const cost = getCost(lead);
                   const profit = getProfit(lead);

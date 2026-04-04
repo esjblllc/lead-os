@@ -39,6 +39,48 @@ function getDateBounds(range: string, from?: string | null, to?: string | null) 
   };
 }
 
+function sortLeads<
+  T extends {
+    createdAt: Date;
+    profit: unknown;
+    marginPct: unknown;
+    assignedBuyer?: {
+      pricePerLead?: unknown;
+    } | null;
+  }
+>(leads: T[], sort: string) {
+  const items = [...leads];
+
+  items.sort((left, right) => {
+    const leftRevenue = toNumber(left.assignedBuyer?.pricePerLead) || 0;
+    const rightRevenue = toNumber(right.assignedBuyer?.pricePerLead) || 0;
+    const leftProfit = toNumber(left.profit) || 0;
+    const rightProfit = toNumber(right.profit) || 0;
+    const leftMargin = toNumber(left.marginPct) || 0;
+    const rightMargin = toNumber(right.marginPct) || 0;
+
+    if (sort === "created_asc") {
+      return left.createdAt.getTime() - right.createdAt.getTime();
+    }
+
+    if (sort === "revenue_desc") {
+      return rightRevenue - leftRevenue;
+    }
+
+    if (sort === "profit_desc") {
+      return rightProfit - leftProfit;
+    }
+
+    if (sort === "margin_desc") {
+      return rightMargin - leftMargin;
+    }
+
+    return right.createdAt.getTime() - left.createdAt.getTime();
+  });
+
+  return items;
+}
+
 function buildFilename() {
   const date = new Date().toISOString().slice(0, 10);
   return `leads-export-${date}.csv`;
@@ -61,6 +103,7 @@ export async function GET(req: Request) {
     const range = url.searchParams.get("range") || "all";
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
+    const sort = url.searchParams.get("sort") || "created_desc";
     const { startDate, endDate } = getDateBounds(range, from, to);
 
     const where = {
@@ -173,6 +216,8 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
     });
 
+    const sortedLeads = sortLeads(leads, sort);
+
     const csv = toCsv(
       [
         "Lead ID",
@@ -207,7 +252,7 @@ export async function GET(req: Request) {
         "Latest Ping Won",
         "Latest Ping At",
       ],
-      leads.map((lead) => {
+      sortedLeads.map((lead) => {
         const latestDelivery = lead.deliveries[0];
         const latestPing = lead.pingResults[0];
 
