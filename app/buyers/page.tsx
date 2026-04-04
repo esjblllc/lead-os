@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useToast } from "@/app/components/toast-provider";
 
 type Buyer = {
   id: string;
@@ -97,6 +98,7 @@ function statusBadgeClass(status: string) {
 }
 
 export default function BuyersPage() {
+  const { toast } = useToast();
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -140,65 +142,79 @@ export default function BuyersPage() {
   });
 
   async function fetchBuyers() {
-    const res = await fetch("/api/buyers");
-    const data = await res.json();
-    const buyerData = data.data || [];
+    try {
+      const res = await fetch("/api/buyers");
+      if (!res.ok) {
+        throw new Error("Failed to fetch buyers");
+      }
 
-    setBuyers(buyerData);
+      const data = await res.json();
+      const buyerData = data.data || [];
 
-    const nextDrafts: Record<string, BuyerDraft> = {};
-    const nextTestPayloads: Record<string, string> = {};
+      setBuyers(buyerData);
 
-    buyerData.forEach((buyer: Buyer) => {
-      nextDrafts[buyer.id] = {
-        name: buyer.name || "",
-        companyName: buyer.companyName || "",
-        contactName: buyer.contactName || "",
-        email: buyer.email || "",
-        webhookUrl: buyer.webhookUrl || "",
-        pingUrl: buyer.pingUrl || "",
-        postUrl: buyer.postUrl || "",
-        timeoutMs:
-          buyer.timeoutMs !== null && typeof buyer.timeoutMs !== "undefined"
-            ? String(buyer.timeoutMs)
-            : "1500",
-        minBid:
-          buyer.minBid !== null && typeof buyer.minBid !== "undefined"
-            ? String(buyer.minBid)
-            : "",
-        status: buyer.status,
-        pricePerLead:
-          buyer.pricePerLead !== null &&
-          typeof buyer.pricePerLead !== "undefined"
-            ? String(buyer.pricePerLead)
-            : "",
-        dailyCap:
-          buyer.dailyCap !== null && typeof buyer.dailyCap !== "undefined"
-            ? String(buyer.dailyCap)
-            : "",
-        acceptedStates: buyer.acceptedStates || "",
-        requiredFields: buyer.requiredFields || "",
-        notes: buyer.notes || "",
-        acceptanceMode: buyer.acceptanceMode || "standard",
-        acceptancePath: buyer.acceptancePath || "",
-        acceptanceValue: buyer.acceptanceValue || "",
-        payoutPath: buyer.payoutPath || "",
-      };
+      const nextDrafts: Record<string, BuyerDraft> = {};
+      const nextTestPayloads: Record<string, string> = {};
 
-      nextTestPayloads[buyer.id] = JSON.stringify(
-        {
-          accepted: true,
-          status: "accepted",
-          payout: 42.5,
-        },
-        null,
-        2
-      );
-    });
+      buyerData.forEach((buyer: Buyer) => {
+        nextDrafts[buyer.id] = {
+          name: buyer.name || "",
+          companyName: buyer.companyName || "",
+          contactName: buyer.contactName || "",
+          email: buyer.email || "",
+          webhookUrl: buyer.webhookUrl || "",
+          pingUrl: buyer.pingUrl || "",
+          postUrl: buyer.postUrl || "",
+          timeoutMs:
+            buyer.timeoutMs !== null && typeof buyer.timeoutMs !== "undefined"
+              ? String(buyer.timeoutMs)
+              : "1500",
+          minBid:
+            buyer.minBid !== null && typeof buyer.minBid !== "undefined"
+              ? String(buyer.minBid)
+              : "",
+          status: buyer.status,
+          pricePerLead:
+            buyer.pricePerLead !== null &&
+            typeof buyer.pricePerLead !== "undefined"
+              ? String(buyer.pricePerLead)
+              : "",
+          dailyCap:
+            buyer.dailyCap !== null && typeof buyer.dailyCap !== "undefined"
+              ? String(buyer.dailyCap)
+              : "",
+          acceptedStates: buyer.acceptedStates || "",
+          requiredFields: buyer.requiredFields || "",
+          notes: buyer.notes || "",
+          acceptanceMode: buyer.acceptanceMode || "standard",
+          acceptancePath: buyer.acceptancePath || "",
+          acceptanceValue: buyer.acceptanceValue || "",
+          payoutPath: buyer.payoutPath || "",
+        };
 
-    setDrafts(nextDrafts);
-    setTestPayloads((prev) => ({ ...nextTestPayloads, ...prev }));
-    setLoading(false);
+        nextTestPayloads[buyer.id] = JSON.stringify(
+          {
+            accepted: true,
+            status: "accepted",
+            payout: 42.5,
+          },
+          null,
+          2
+        );
+      });
+
+      setDrafts(nextDrafts);
+      setTestPayloads((prev) => ({ ...nextTestPayloads, ...prev }));
+    } catch (error) {
+      console.error("Buyer fetch error:", error);
+      toast({
+        title: "Could not load buyers",
+        description: "Refresh the page and try again.",
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -280,6 +296,11 @@ export default function BuyersPage() {
       }
 
       setCreateSuccess("Buyer created successfully.");
+      toast({
+        title: "Buyer created",
+        description: `${newBuyer.name} is ready for routing setup.`,
+        variant: "success",
+      });
 
       setNewBuyer({
         name: "",
@@ -305,7 +326,13 @@ export default function BuyersPage() {
 
       await fetchBuyers();
     } catch (err: any) {
-      setCreateError(err?.message || "Failed to create buyer");
+      const message = err?.message || "Failed to create buyer";
+      setCreateError(message);
+      toast({
+        title: "Buyer creation failed",
+        description: message,
+        variant: "error",
+      });
     } finally {
       setCreating(false);
     }
@@ -340,8 +367,18 @@ export default function BuyersPage() {
 
       await fetchBuyers();
       showSavedNotice(id, "Buyer settings saved.");
+      toast({
+        title: "Buyer saved",
+        description: "Buyer settings updated successfully.",
+        variant: "success",
+      });
     } catch (err) {
       console.error("Buyer save error:", err);
+      toast({
+        title: "Buyer save failed",
+        description: "Please try saving this buyer again.",
+        variant: "error",
+      });
     } finally {
       setSavingId(null);
     }
@@ -393,11 +430,22 @@ export default function BuyersPage() {
         ...prev,
         [id]: json.data,
       }));
+      toast({
+        title: "Response test complete",
+        description: "Buyer parsing rules ran against the sample JSON.",
+        variant: "success",
+      });
     } catch (err: any) {
+      const message = err?.message || "Failed to run response test";
       setTestErrors((prev) => ({
         ...prev,
-        [id]: err?.message || "Failed to run response test",
+        [id]: message,
       }));
+      toast({
+        title: "Response test failed",
+        description: message,
+        variant: "error",
+      });
     } finally {
       setTestLoadingId(null);
     }
@@ -406,8 +454,17 @@ export default function BuyersPage() {
   async function copyText(value: string) {
     try {
       await navigator.clipboard.writeText(value);
+      toast({
+        title: "Copied to clipboard",
+        variant: "info",
+      });
     } catch (err) {
       console.error("Clipboard error:", err);
+      toast({
+        title: "Copy failed",
+        description: "Your browser could not copy that value.",
+        variant: "error",
+      });
     }
   }
 

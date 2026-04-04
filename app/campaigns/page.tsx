@@ -7,6 +7,7 @@ import {
   parseInboundFieldList,
   sanitizeCustomInboundFieldKey,
 } from "@/lib/inbound-spec";
+import { useToast } from "@/app/components/toast-provider";
 
 type Campaign = {
   id: string;
@@ -91,6 +92,7 @@ function routingModeLabel(mode: string) {
 }
 
 export default function CampaignsPage() {
+  const { toast } = useToast();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -133,29 +135,43 @@ export default function CampaignsPage() {
   }
 
   async function fetchCampaigns() {
-    const res = await fetch("/api/campaigns");
-    const data = await res.json();
-    const campaignData = data.data || [];
+    try {
+      const res = await fetch("/api/campaigns");
+      if (!res.ok) {
+        throw new Error("Failed to fetch campaigns");
+      }
 
-    setCampaigns(campaignData);
+      const data = await res.json();
+      const campaignData = data.data || [];
 
-    const nextDrafts: Record<string, CampaignDraft> = {};
-    campaignData.forEach((campaign: Campaign) => {
-      nextDrafts[campaign.id] = {
-        name: campaign.name || "",
-        slug: campaign.slug || "",
-        vertical: campaign.vertical || "",
-        routingMode: campaign.routingMode || "direct_post",
-        status: campaign.status || "active",
-        inboundRequiredFields: campaign.inboundRequiredFields || "",
-        inboundOptionalFields: campaign.inboundOptionalFields || "",
-        customInboundFields: campaign.customInboundFields || "[]",
-        publisherSpecNotes: campaign.publisherSpecNotes || "",
-      };
-    });
+      setCampaigns(campaignData);
 
-    setDrafts(nextDrafts);
-    setLoading(false);
+      const nextDrafts: Record<string, CampaignDraft> = {};
+      campaignData.forEach((campaign: Campaign) => {
+        nextDrafts[campaign.id] = {
+          name: campaign.name || "",
+          slug: campaign.slug || "",
+          vertical: campaign.vertical || "",
+          routingMode: campaign.routingMode || "direct_post",
+          status: campaign.status || "active",
+          inboundRequiredFields: campaign.inboundRequiredFields || "",
+          inboundOptionalFields: campaign.inboundOptionalFields || "",
+          customInboundFields: campaign.customInboundFields || "[]",
+          publisherSpecNotes: campaign.publisherSpecNotes || "",
+        };
+      });
+
+      setDrafts(nextDrafts);
+    } catch (error) {
+      console.error("Campaign fetch error:", error);
+      toast({
+        title: "Could not load campaigns",
+        description: "Refresh the page and try again.",
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -470,6 +486,11 @@ export default function CampaignsPage() {
       }
 
       setCreateSuccess("Campaign created successfully.");
+      toast({
+        title: "Campaign created",
+        description: `${newCampaign.name} is ready to configure.`,
+        variant: "success",
+      });
       setIsNewCampaignOpen(false);
 
       setNewCampaign({
@@ -486,9 +507,16 @@ export default function CampaignsPage() {
 
       await fetchCampaigns();
     } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to create campaign";
       setCreateError(
-        err instanceof Error ? err.message : "Failed to create campaign"
+        message
       );
+      toast({
+        title: "Campaign creation failed",
+        description: message,
+        variant: "error",
+      });
     } finally {
       setCreating(false);
     }
@@ -529,8 +557,18 @@ export default function CampaignsPage() {
 
       await fetchCampaigns();
       showSavedNotice(id, successMessage);
+      toast({
+        title: "Campaign saved",
+        description: successMessage,
+        variant: "success",
+      });
     } catch (err) {
       console.error("Campaign save error:", err);
+      toast({
+        title: "Campaign save failed",
+        description: "Please try saving this campaign again.",
+        variant: "error",
+      });
     } finally {
       setSavingId(null);
     }
@@ -568,8 +606,18 @@ export default function CampaignsPage() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      toast({
+        title: "Campaign export ready",
+        description: `${campaign.name} leads downloaded as CSV.`,
+        variant: "success",
+      });
     } catch (err) {
       console.error("Campaign export error:", err);
+      toast({
+        title: "Campaign export failed",
+        description: "Please try exporting those leads again.",
+        variant: "error",
+      });
     } finally {
       setExportingId(null);
     }

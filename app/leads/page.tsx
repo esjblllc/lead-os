@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { useToast } from "@/app/components/toast-provider";
 
 type PingResult = {
   id: string;
@@ -106,6 +107,7 @@ function pingStatusBadgeClass(status: string) {
 }
 
 export default function LeadsPage() {
+  const { toast } = useToast();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
@@ -128,6 +130,11 @@ export default function LeadsPage() {
       setLeads(json.data || []);
     } catch (err) {
       console.error("Fetch error:", err);
+      toast({
+        title: "Could not load leads",
+        description: "Refresh the page and try again.",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
@@ -303,8 +310,18 @@ export default function LeadsPage() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      toast({
+        title: "Lead export ready",
+        description: "The filtered leads CSV has been downloaded.",
+        variant: "success",
+      });
     } catch (err) {
       console.error("Leads export error:", err);
+      toast({
+        title: "Lead export failed",
+        description: "Please try exporting the visible leads again.",
+        variant: "error",
+      });
     } finally {
       setExporting(false);
     }

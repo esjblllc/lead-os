@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useToast } from "@/app/components/toast-provider";
 
 type Supplier = {
   id: string;
@@ -57,6 +58,7 @@ function statusBadgeClass(status: string) {
 }
 
 export default function SuppliersPage() {
+  const { toast } = useToast();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -87,33 +89,47 @@ export default function SuppliersPage() {
   });
 
   async function fetchSuppliers() {
-    const res = await fetch("/api/suppliers");
-    const data = await res.json();
-    const supplierData = data.data || [];
+    try {
+      const res = await fetch("/api/suppliers");
+      if (!res.ok) {
+        throw new Error("Failed to fetch suppliers");
+      }
 
-    setSuppliers(supplierData);
+      const data = await res.json();
+      const supplierData = data.data || [];
 
-    const nextDrafts: Record<string, SupplierDraft> = {};
-    supplierData.forEach((supplier: Supplier) => {
-      nextDrafts[supplier.id] = {
-        name: supplier.name || "",
-        companyName: supplier.companyName || "",
-        contactName: supplier.contactName || "",
-        email: supplier.email || "",
-        trafficSource: supplier.trafficSource || "",
-        defaultCost:
-          supplier.defaultCost !== null &&
-          typeof supplier.defaultCost !== "undefined"
-            ? String(supplier.defaultCost)
-            : "",
-        status: supplier.status,
-        acceptedVerticals: supplier.acceptedVerticals || "",
-        notes: supplier.notes || "",
-      };
-    });
+      setSuppliers(supplierData);
 
-    setDrafts(nextDrafts);
-    setLoading(false);
+      const nextDrafts: Record<string, SupplierDraft> = {};
+      supplierData.forEach((supplier: Supplier) => {
+        nextDrafts[supplier.id] = {
+          name: supplier.name || "",
+          companyName: supplier.companyName || "",
+          contactName: supplier.contactName || "",
+          email: supplier.email || "",
+          trafficSource: supplier.trafficSource || "",
+          defaultCost:
+            supplier.defaultCost !== null &&
+            typeof supplier.defaultCost !== "undefined"
+              ? String(supplier.defaultCost)
+              : "",
+          status: supplier.status,
+          acceptedVerticals: supplier.acceptedVerticals || "",
+          notes: supplier.notes || "",
+        };
+      });
+
+      setDrafts(nextDrafts);
+    } catch (error) {
+      console.error("Supplier fetch error:", error);
+      toast({
+        title: "Could not load suppliers",
+        description: "Refresh the page and try again.",
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -181,6 +197,11 @@ export default function SuppliersPage() {
       }
 
       setCreateSuccess("Supplier created successfully.");
+      toast({
+        title: "Supplier created",
+        description: `${newSupplier.name} is ready for inbound traffic.`,
+        variant: "success",
+      });
 
       setNewSupplier({
         name: "",
@@ -196,7 +217,13 @@ export default function SuppliersPage() {
 
       await fetchSuppliers();
     } catch (err: any) {
-      setCreateError(err?.message || "Failed to create supplier");
+      const message = err?.message || "Failed to create supplier";
+      setCreateError(message);
+      toast({
+        title: "Supplier creation failed",
+        description: message,
+        variant: "error",
+      });
     } finally {
       setCreating(false);
     }
@@ -221,8 +248,18 @@ export default function SuppliersPage() {
 
       await fetchSuppliers();
       showSavedNotice(id, "Supplier settings saved.");
+      toast({
+        title: "Supplier saved",
+        description: "Supplier settings updated successfully.",
+        variant: "success",
+      });
     } catch (err) {
       console.error("Supplier save error:", err);
+      toast({
+        title: "Supplier save failed",
+        description: "Please try saving this supplier again.",
+        variant: "error",
+      });
     } finally {
       setSavingId(null);
     }
@@ -255,16 +292,35 @@ export default function SuppliersPage() {
       }
 
       await fetchSuppliers();
+      toast({
+        title: "API key regenerated",
+        description: "Share the new key with the supplier before they post again.",
+        variant: "success",
+      });
     } catch (err) {
       console.error("Regenerate API key error:", err);
+      toast({
+        title: "API key regeneration failed",
+        description: "Please try generating a new key again.",
+        variant: "error",
+      });
     }
   }
 
   async function copyText(value: string) {
     try {
       await navigator.clipboard.writeText(value);
+      toast({
+        title: "Copied to clipboard",
+        variant: "info",
+      });
     } catch (err) {
       console.error("Clipboard error:", err);
+      toast({
+        title: "Copy failed",
+        description: "Your browser could not copy that value.",
+        variant: "error",
+      });
     }
   }
 
