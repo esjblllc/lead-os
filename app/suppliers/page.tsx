@@ -17,6 +17,8 @@ type Supplier = {
   acceptedVerticals?: string | null;
   notes?: string | null;
   organizationId: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type SupplierDraft = {
@@ -55,6 +57,19 @@ function statusBadgeClass(status: string) {
   return status === "active"
     ? "bg-green-100 text-green-700"
     : "bg-yellow-100 text-yellow-700";
+}
+
+function formatAuditDate(value?: string) {
+  if (!value) return "-";
+
+  return new Date(value).toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 export default function SuppliersPage() {
@@ -965,6 +980,16 @@ export default function SuppliersPage() {
                                     </div>
                                     <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700 break-all">
                                       x-api-key: {supplier.apiKey}
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <div className="font-medium text-gray-800">
+                                      Audit Trail
+                                    </div>
+                                    <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700 space-y-1">
+                                      <div>Created: {formatAuditDate(supplier.createdAt)}</div>
+                                      <div>Last Updated: {formatAuditDate(supplier.updatedAt)}</div>
                                     </div>
                                   </div>
 

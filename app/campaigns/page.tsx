@@ -91,6 +91,19 @@ function routingModeLabel(mode: string) {
   return "Direct Post";
 }
 
+function formatAuditDate(value?: string) {
+  if (!value) return "-";
+
+  return new Date(value).toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function CampaignsPage() {
   const { toast } = useToast();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -1658,6 +1671,14 @@ export default function CampaignsPage() {
                                     <div className="font-medium text-gray-800">Campaign Slug</div>
                                     <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700 break-all">
                                       {draft?.slug || campaign.slug}
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <div className="font-medium text-gray-800">Audit Trail</div>
+                                    <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700 space-y-1">
+                                      <div>Created: {formatAuditDate(campaign.createdAt)}</div>
+                                      <div>Last Updated: {formatAuditDate(campaign.updatedAt)}</div>
                                     </div>
                                   </div>
 

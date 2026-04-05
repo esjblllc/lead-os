@@ -26,6 +26,8 @@ type Buyer = {
   acceptancePath?: string | null;
   acceptanceValue?: string | null;
   payoutPath?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type BuyerDraft = {
@@ -95,6 +97,19 @@ function statusBadgeClass(status: string) {
   return status === "active"
     ? "bg-green-100 text-green-700"
     : "bg-yellow-100 text-yellow-700";
+}
+
+function formatAuditDate(value?: string) {
+  if (!value) return "-";
+
+  return new Date(value).toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 export default function BuyersPage() {
@@ -1490,6 +1505,16 @@ export default function BuyersPage() {
                                       <div>Acceptance Value: {buyer.acceptanceValue || "—"}</div>
                                       <div>Payout Path: {buyer.payoutPath || "—"}</div>
                                       <div>Daily Cap: {buyer.dailyCap ?? "—"}</div>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <div className="font-medium text-gray-800">
+                                      Audit Trail
+                                    </div>
+                                    <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-700 space-y-1">
+                                      <div>Created: {formatAuditDate(buyer.createdAt)}</div>
+                                      <div>Last Updated: {formatAuditDate(buyer.updatedAt)}</div>
                                     </div>
                                   </div>
                                 </div>
