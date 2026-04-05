@@ -1249,7 +1249,7 @@ export default function BuyersPage() {
                                     </div>
                                   </div>
 
-                                  <div className="mt-5 flex items-center gap-3">
+                                  <div className="sticky bottom-0 z-10 mt-5 -mx-5 flex items-center gap-3 border-t border-gray-200 bg-white/95 px-5 py-4 backdrop-blur">
                                     <button
                                       onClick={() => saveBuyer(buyer.id)}
                                       disabled={!isDirty(buyer) || savingId === buyer.id}
@@ -1263,6 +1263,12 @@ export default function BuyersPage() {
                                         Unsaved changes
                                       </span>
                                     )}
+
+                                    {!isDirty(buyer) && savingId !== buyer.id ? (
+                                      <span className="text-sm text-gray-500">
+                                        Save stays pinned while you work through this buyer setup.
+                                      </span>
+                                    ) : null}
                                   </div>
                                 </div>
 
