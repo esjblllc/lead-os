@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { getRequestSessionUser, isPlatformAdmin } from "@/lib/request-session-user";
+import { buildPostbackSecret } from "@/lib/tracking-postback";
 
 function slugify(value: string) {
   return value
@@ -89,6 +90,8 @@ export async function POST(req: Request) {
       destinationUrl,
       status,
       organizationId,
+      publisherPostbackEnabled,
+      publisherPostbackUrl,
     } = body;
 
     if (!name || !trackingCampaignId) {
@@ -158,6 +161,9 @@ export async function POST(req: Request) {
             : null,
         destinationUrl: destinationUrl || null,
         status: status || "active",
+        publisherPostbackEnabled: Boolean(publisherPostbackEnabled),
+        publisherPostbackUrl: publisherPostbackUrl || null,
+        postbackSecret: buildPostbackSecret(),
       },
       include: {
         organization: true,

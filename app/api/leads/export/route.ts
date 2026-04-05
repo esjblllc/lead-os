@@ -42,6 +42,7 @@ function getDateBounds(range: string, from?: string | null, to?: string | null) 
 function sortLeads<
   T extends {
     createdAt: Date;
+    cost: unknown;
     profit: unknown;
     marginPct: unknown;
     assignedBuyer?: {
@@ -51,9 +52,19 @@ function sortLeads<
 >(leads: T[], sort: string) {
   const items = [...leads];
 
+  const getRevenue = (item: T) => {
+    const buyerRevenue = toNumber(item.assignedBuyer?.pricePerLead);
+    if (buyerRevenue !== null) return buyerRevenue;
+
+    const cost = toNumber(item.cost);
+    const profit = toNumber(item.profit);
+    if (cost === null && profit === null) return 0;
+    return (cost || 0) + (profit || 0);
+  };
+
   items.sort((left, right) => {
-    const leftRevenue = toNumber(left.assignedBuyer?.pricePerLead) || 0;
-    const rightRevenue = toNumber(right.assignedBuyer?.pricePerLead) || 0;
+    const leftRevenue = getRevenue(left);
+    const rightRevenue = getRevenue(right);
     const leftProfit = toNumber(left.profit) || 0;
     const rightProfit = toNumber(right.profit) || 0;
     const leftMargin = toNumber(left.marginPct) || 0;
@@ -236,7 +247,7 @@ export async function GET(req: Request) {
         "Sub ID",
         "Publisher ID",
         "Custom Data",
-        "Buyer Revenue",
+        "Revenue",
         "Cost",
         "Profit",
         "Margin %",
@@ -255,6 +266,11 @@ export async function GET(req: Request) {
       sortedLeads.map((lead) => {
         const latestDelivery = lead.deliveries[0];
         const latestPing = lead.pingResults[0];
+        const buyerRevenue = toNumber(lead.assignedBuyer?.pricePerLead);
+        const revenue =
+          buyerRevenue !== null
+            ? buyerRevenue
+            : (toNumber(lead.cost) || 0) + (toNumber(lead.profit) || 0);
 
         return [
           lead.id,
@@ -273,7 +289,7 @@ export async function GET(req: Request) {
           lead.subId,
           lead.publisherId,
           lead.customData,
-          toNumber(lead.assignedBuyer?.pricePerLead),
+          revenue,
           toNumber(lead.cost),
           toNumber(lead.profit),
           toNumber(lead.marginPct),

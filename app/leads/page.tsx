@@ -317,7 +317,14 @@ export default function LeadsPage() {
   }, [filteredLeads, sortBy]);
 
   function getRevenue(lead: Lead) {
-    return toNumber(lead.assignedBuyer?.pricePerLead);
+    const buyerRevenue = toNumber(lead.assignedBuyer?.pricePerLead);
+    if (buyerRevenue !== null) return buyerRevenue;
+
+    const cost = toNumber(lead.cost);
+    const profit = toNumber(lead.profit);
+
+    if (cost === null && profit === null) return null;
+    return (cost || 0) + (profit || 0);
   }
 
   function getCost(lead: Lead) {

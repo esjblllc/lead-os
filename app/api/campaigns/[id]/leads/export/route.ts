@@ -141,7 +141,7 @@ export async function GET(req: Request, context: RouteContext) {
         "Routing Status",
         "Supplier",
         "Assigned Buyer",
-        "Buyer Revenue",
+        "Revenue",
         "Cost",
         "Profit",
         "Margin %",
@@ -164,6 +164,11 @@ export async function GET(req: Request, context: RouteContext) {
       leads.map((lead) => {
         const latestDelivery = lead.deliveries[0];
         const latestPing = lead.pingResults[0];
+        const buyerRevenue = toNumber(lead.assignedBuyer?.pricePerLead);
+        const revenue =
+          buyerRevenue !== null
+            ? buyerRevenue
+            : (toNumber(lead.cost) || 0) + (toNumber(lead.profit) || 0);
 
         return [
           lead.id,
@@ -178,7 +183,7 @@ export async function GET(req: Request, context: RouteContext) {
           lead.routingStatus,
           lead.supplier?.name,
           lead.assignedBuyer?.name,
-          toNumber(lead.assignedBuyer?.pricePerLead),
+          revenue,
           toNumber(lead.cost),
           toNumber(lead.profit),
           toNumber(lead.marginPct),

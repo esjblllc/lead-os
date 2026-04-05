@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type Organization = {
-  id: string;
-  name: string;
-};
+import { useToast } from "@/app/components/toast-provider";
+
+type Organization = { id: string; name: string };
 
 type TrackingCampaign = {
   id: string;
@@ -29,13 +28,14 @@ type TrackingLink = {
   costPerClick?: number | null;
   destinationUrl?: string | null;
   status: string;
+  publisherPostbackEnabled: boolean;
+  publisherPostbackUrl?: string | null;
+  postbackSecret: string;
   createdAt: string;
+  updatedAt: string;
   organization: Organization;
   trackingCampaign: TrackingCampaign;
-  _count?: {
-    clicks: number;
-    leads: number;
-  };
+  _count?: { clicks: number; leads: number };
 };
 
 type SessionUser = {
@@ -60,6 +60,13 @@ type NewLinkForm = {
   destinationUrl: string;
   status: string;
   organizationId: string;
+  publisherPostbackEnabled: boolean;
+  publisherPostbackUrl: string;
+};
+
+type PostbackDraft = {
+  publisherPostbackEnabled: boolean;
+  publisherPostbackUrl: string;
 };
 
 function formatDate(value: string) {
@@ -70,25 +77,33 @@ function truncateId(value: string) {
   return value.length > 8 ? value.slice(0, 8) : value;
 }
 
-function statusBadgeClass(status: string) {
-  return status === "active"
-    ? "bg-green-100 text-green-700"
-    : "bg-yellow-100 text-yellow-700";
+function toMoney(value: number | null | undefined) {
+  if (value === null || typeof value === "undefined") return "-";
+  return `$${Number(value).toFixed(4)}`;
+}
+
+function badgeClass(active: boolean) {
+  return active ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600";
+}
+
+function buildSoldPostbackTemplate(origin: string, link: TrackingLink) {
+  return `${origin}/api/tracking/postbacks/sold?click_id={click_id}&revenue={revenue}&cost={cost}&source=everflow&postback_key=${link.postbackSecret}`;
 }
 
 export default function TrackingLinksPage() {
+  const { toast } = useToast();
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [links, setLinks] = useState<TrackingLink[]>([]);
   const [campaigns, setCampaigns] = useState<TrackingCampaign[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState("");
-  const [createSuccess, setCreateSuccess] = useState("");
-  const [copiedSlug, setCopiedSlug] = useState("");
+  const [savingLinkId, setSavingLinkId] = useState<string | null>(null);
+  const [expandedLinkId, setExpandedLinkId] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-
+  const [drafts, setDrafts] = useState<Record<string, PostbackDraft>>({});
   const [newLink, setNewLink] = useState<NewLinkForm>({
     name: "",
     slug: "",
@@ -103,11 +118,25 @@ export default function TrackingLinksPage() {
     destinationUrl: "",
     status: "active",
     organizationId: "",
+    publisherPostbackEnabled: false,
+    publisherPostbackUrl: "",
   });
 
   const isPlatform = sessionUser?.role === "platform_admin";
-  const canManage =
-    sessionUser?.role === "platform_admin" || sessionUser?.role === "admin";
+  const canManage = isPlatform || sessionUser?.role === "admin";
+
+  function syncDrafts(nextLinks: TrackingLink[]) {
+    setDrafts((prev) => {
+      const next: Record<string, PostbackDraft> = {};
+      for (const link of nextLinks) {
+        next[link.id] = prev[link.id] || {
+          publisherPostbackEnabled: link.publisherPostbackEnabled,
+          publisherPostbackUrl: link.publisherPostbackUrl || "",
+        };
+      }
+      return next;
+    });
+  }
 
   async function fetchPageData() {
     try {
@@ -115,19 +144,17 @@ export default function TrackingLinksPage() {
         fetch("/api/session/me", { cache: "no-store" }),
         fetch("/api/tracking-links", { cache: "no-store" }),
       ]);
-
       const sessionJson = sessionRes.ok ? await sessionRes.json() : { data: null };
       const linksJson = linksRes.ok
         ? await linksRes.json()
         : { data: [], campaigns: [], organizations: [] };
-
       const currentUser = sessionJson.data || null;
-
+      const nextLinks = linksJson.data || [];
       setSessionUser(currentUser);
-      setLinks(linksJson.data || []);
+      setLinks(nextLinks);
       setCampaigns(linksJson.campaigns || []);
       setOrganizations(linksJson.organizations || []);
-
+      syncDrafts(nextLinks);
       if (currentUser?.role !== "platform_admin") {
         setNewLink((prev) => ({
           ...prev,
@@ -136,6 +163,11 @@ export default function TrackingLinksPage() {
       }
     } catch (error) {
       console.error("Failed to load tracking links page:", error);
+      toast({
+        title: "Could not load tracking links",
+        description: "Refresh the page and try again.",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
@@ -145,31 +177,59 @@ export default function TrackingLinksPage() {
     fetchPageData();
   }, []);
 
-  function updateNewLink(field: keyof NewLinkForm, value: string) {
-    setNewLink((prev) => ({
+  function updateNewLink(field: keyof NewLinkForm, value: string | boolean) {
+    setNewLink((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function updateDraft(linkId: string, field: keyof PostbackDraft, value: string | boolean) {
+    setDrafts((prev) => ({
       ...prev,
-      [field]: value,
+      [linkId]: {
+        ...(prev[linkId] || {
+          publisherPostbackEnabled: false,
+          publisherPostbackUrl: "",
+        }),
+        [field]: value,
+      },
     }));
+  }
+
+  async function copyValue(copyId: string, value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedKey(copyId);
+      window.setTimeout(() => setCopiedKey(""), 1800);
+      toast({
+        title: "Copied to clipboard",
+        description: `${label} is ready to paste.`,
+        variant: "info",
+      });
+    } catch (error) {
+      console.error("Copy failed:", error);
+      toast({
+        title: "Copy failed",
+        description: "Your browser could not copy that value.",
+        variant: "error",
+      });
+    }
   }
 
   async function createLink(e: React.FormEvent) {
     e.preventDefault();
-    setCreateError("");
-    setCreateSuccess("");
-
     if (!newLink.name.trim() || !newLink.trackingCampaignId) {
-      setCreateError("Name and tracking campaign are required.");
+      toast({
+        title: "Tracking link creation failed",
+        description: "Name and tracking campaign are required.",
+        variant: "error",
+      });
       return;
     }
 
     try {
       setCreating(true);
-
       const res = await fetch("/api/tracking-links", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newLink.name,
           slug: newLink.slug || undefined,
@@ -184,16 +244,17 @@ export default function TrackingLinksPage() {
           destinationUrl: newLink.destinationUrl || null,
           status: newLink.status,
           organizationId: isPlatform ? newLink.organizationId : null,
+          publisherPostbackEnabled: newLink.publisherPostbackEnabled,
+          publisherPostbackUrl: newLink.publisherPostbackUrl || null,
         }),
       });
-
       const json = await res.json();
-
-      if (!res.ok) {
-        throw new Error(json?.error || "Failed to create tracking link");
-      }
-
-      setCreateSuccess("Tracking link created successfully.");
+      if (!res.ok) throw new Error(json?.error || "Failed to create tracking link");
+      toast({
+        title: "Tracking link created",
+        description: `${newLink.name} is ready for traffic and postbacks.`,
+        variant: "success",
+      });
       setNewLink({
         name: "",
         slug: "",
@@ -208,24 +269,69 @@ export default function TrackingLinksPage() {
         destinationUrl: "",
         status: "active",
         organizationId: isPlatform ? "" : sessionUser?.organizationId || "",
+        publisherPostbackEnabled: false,
+        publisherPostbackUrl: "",
       });
-
       await fetchPageData();
-    } catch (err: any) {
-      setCreateError(err?.message || "Failed to create tracking link");
+    } catch (error) {
+      console.error("Create tracking link failed:", error);
+      toast({
+        title: "Tracking link creation failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "error",
+      });
     } finally {
       setCreating(false);
     }
   }
 
-  async function copyTrackingUrl(slug: string) {
+  async function savePostbackSettings(link: TrackingLink) {
+    const draft = drafts[link.id];
+    if (!draft) return;
+    if (draft.publisherPostbackEnabled && !draft.publisherPostbackUrl.trim()) {
+      toast({
+        title: "Publisher URL required",
+        description: "Add the outbound publisher postback URL before enabling it.",
+        variant: "error",
+      });
+      return;
+    }
+
     try {
-      const url = `${window.location.origin}/t/${slug}`;
-      await navigator.clipboard.writeText(url);
-      setCopiedSlug(slug);
-      setTimeout(() => setCopiedSlug(""), 2000);
+      setSavingLinkId(link.id);
+      const res = await fetch(`/api/tracking-links/${link.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          publisherPostbackEnabled: draft.publisherPostbackEnabled,
+          publisherPostbackUrl: draft.publisherPostbackUrl.trim() || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to update tracking link");
+      const updated = json.data as TrackingLink;
+      setLinks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setDrafts((prev) => ({
+        ...prev,
+        [updated.id]: {
+          publisherPostbackEnabled: updated.publisherPostbackEnabled,
+          publisherPostbackUrl: updated.publisherPostbackUrl || "",
+        },
+      }));
+      toast({
+        title: "Postback settings saved",
+        description: `${link.name} is ready for sold conversion callbacks.`,
+        variant: "success",
+      });
     } catch (error) {
-      console.error("Failed to copy tracking URL:", error);
+      console.error("Save postback settings failed:", error);
+      toast({
+        title: "Postback settings failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setSavingLinkId(null);
     }
   }
 
@@ -240,7 +346,6 @@ export default function TrackingLinksPage() {
 
   const filteredLinks = useMemo(() => {
     const q = search.toLowerCase().trim();
-
     return links.filter((link) => {
       const matchesSearch =
         q === "" ||
@@ -250,12 +355,8 @@ export default function TrackingLinksPage() {
         (link.trafficSource || "").toLowerCase().includes(q) ||
         (link.publisherId || "").toLowerCase().includes(q) ||
         (link.subId || "").toLowerCase().includes(q) ||
-        link.trackingCampaign?.name?.toLowerCase().includes(q) ||
-        link.organization?.name?.toLowerCase().includes(q);
-
-      const matchesStatus =
-        statusFilter === "all" || link.status === statusFilter;
-
+        (link.publisherPostbackUrl || "").toLowerCase().includes(q);
+      const matchesStatus = statusFilter === "all" || link.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
   }, [links, search, statusFilter]);
@@ -267,9 +368,7 @@ export default function TrackingLinksPage() {
   if (!canManage) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-          Tracking Links
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Tracking Links</h1>
         <p className="mt-2 text-sm text-gray-500">
           You do not have permission to manage tracking links.
         </p>
@@ -279,7 +378,7 @@ export default function TrackingLinksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-200 px-6 py-5">
           <div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">
             Link Tracking Suite
@@ -288,25 +387,18 @@ export default function TrackingLinksPage() {
             Tracking Links
           </h1>
           <p className="mt-2 text-sm text-gray-500">
-            Create click-tracking URLs for traffic sources, publishers, and sub IDs.
+            Create click-tracking URLs, then configure sold-lead postbacks for platforms like Everflow.
           </p>
         </div>
-
         <div className="p-6">
-          <form
-            onSubmit={createLink}
-            className="rounded-2xl border border-gray-200 bg-gray-50 p-5"
-          >
+          <form onSubmit={createLink} className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  New Tracking Link
-                </h2>
+                <h2 className="text-lg font-semibold text-gray-900">New Tracking Link</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Create a redirectable tracking URL that logs every click.
+                  Create a redirect URL that logs clicks and can later trigger publisher conversion callbacks.
                 </p>
               </div>
-
               <button
                 type="submit"
                 disabled={creating}
@@ -317,296 +409,186 @@ export default function TrackingLinksPage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Link Name
-                </label>
-                <input
-                  value={newLink.name}
-                  onChange={(e) => updateNewLink("name", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  placeholder="FB Auto Accident - Publisher A"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Slug
-                </label>
-                <input
-                  value={newLink.slug}
-                  onChange={(e) => updateNewLink("slug", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  placeholder="Optional - auto-generated if blank"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Tracking Campaign
-                </label>
-                <select
-                  value={newLink.trackingCampaignId}
-                  onChange={(e) => updateNewLink("trackingCampaignId", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">Select campaign</option>
-                  {filteredCampaigns.map((campaign) => (
-                    <option key={campaign.id} value={campaign.id}>
-                      {campaign.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Traffic Source
-                </label>
-                <input
-                  value={newLink.trafficSource}
-                  onChange={(e) => updateNewLink("trafficSource", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  placeholder="facebook"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Publisher ID
-                </label>
-                <input
-                  value={newLink.publisherId}
-                  onChange={(e) => updateNewLink("publisherId", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  placeholder="publisher_123"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Sub ID
-                </label>
-                <input
-                  value={newLink.subId}
-                  onChange={(e) => updateNewLink("subId", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  placeholder="sub_123"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Sub ID 2
-                </label>
-                <input
-                  value={newLink.subId2}
-                  onChange={(e) => updateNewLink("subId2", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  placeholder="Optional"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Sub ID 3
-                </label>
-                <input
-                  value={newLink.subId3}
-                  onChange={(e) => updateNewLink("subId3", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  placeholder="Optional"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Status
-                </label>
-                <select
-                  value={newLink.status}
-                  onChange={(e) => updateNewLink("status", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="active">active</option>
-                  <option value="inactive">inactive</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Cost Model
-                </label>
-                <select
-                  value={newLink.costModel}
-                  onChange={(e) => updateNewLink("costModel", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="cpc">cpc</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Cost Per Click
-                </label>
-                <input
-                  value={newLink.costPerClick}
-                  onChange={(e) => updateNewLink("costPerClick", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  placeholder="0.50"
-                />
-              </div>
-
-              <div className="md:col-span-2 xl:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Override Destination URL
-                </label>
-                <input
-                  value={newLink.destinationUrl}
-                  onChange={(e) => updateNewLink("destinationUrl", e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  placeholder="Optional - campaign destination will be used if blank"
-                />
-              </div>
-
-              {isPlatform ? (
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Organization
-                  </label>
-                  <select
-                    value={newLink.organizationId}
-                    onChange={(e) => updateNewLink("organizationId", e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-                  >
-                    <option value="">Select organization</option>
-                    {organizations.map((org) => (
-                      <option key={org.id} value={org.id}>
-                        {org.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
-            </div>
-
-            {createError ? (
-              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {createError}
-              </div>
-            ) : null}
-
-            {createSuccess ? (
-              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-                {createSuccess}
-              </div>
-            ) : null}
-          </form>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Search
-              </label>
-              <input
-                type="text"
-                placeholder="Link ID, name, slug, source, publisher, sub ID..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Status
-              </label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-              >
-                <option value="all">All statuses</option>
+              <input value={newLink.name} onChange={(e) => updateNewLink("name", e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="Link name" />
+              <input value={newLink.slug} onChange={(e) => updateNewLink("slug", e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="Slug (optional)" />
+              <select value={newLink.trackingCampaignId} onChange={(e) => updateNewLink("trackingCampaignId", e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm">
+                <option value="">Select campaign</option>
+                {filteredCampaigns.map((campaign) => (
+                  <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
+                ))}
+              </select>
+              <input value={newLink.trafficSource} onChange={(e) => updateNewLink("trafficSource", e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="Traffic source" />
+              <input value={newLink.publisherId} onChange={(e) => updateNewLink("publisherId", e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="Publisher ID" />
+              <input value={newLink.subId} onChange={(e) => updateNewLink("subId", e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="Sub ID" />
+              <input value={newLink.subId2} onChange={(e) => updateNewLink("subId2", e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="Sub ID 2" />
+              <input value={newLink.subId3} onChange={(e) => updateNewLink("subId3", e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="Sub ID 3" />
+              <input value={newLink.costPerClick} onChange={(e) => updateNewLink("costPerClick", e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="Cost per click" />
+              <input value={newLink.destinationUrl} onChange={(e) => updateNewLink("destinationUrl", e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm md:col-span-2" placeholder="Override destination URL (optional)" />
+              <select value={newLink.status} onChange={(e) => updateNewLink("status", e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm">
                 <option value="active">active</option>
                 <option value="inactive">inactive</option>
               </select>
+              {isPlatform ? (
+                <select value={newLink.organizationId} onChange={(e) => updateNewLink("organizationId", e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm">
+                  <option value="">Select organization</option>
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+              ) : null}
             </div>
+
+            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+              <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+                <input type="checkbox" checked={newLink.publisherPostbackEnabled} onChange={(e) => updateNewLink("publisherPostbackEnabled", e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
+                Enable outbound publisher postback
+              </label>
+              <input
+                value={newLink.publisherPostbackUrl}
+                onChange={(e) => updateNewLink("publisherPostbackUrl", e.target.value)}
+                className="mt-3 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                placeholder="https://publisher.example/postback?click_id={click_id}&payout={revenue}"
+              />
+              <p className="mt-2 text-xs text-gray-500">
+                Supported placeholders: {"{click_id}"}, {"{lead_id}"}, {"{revenue}"}, {"{cost}"}, {"{profit}"}, {"{publisher_id}"}, {"{sub_id}"}.
+              </p>
+            </div>
+          </form>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <input type="text" placeholder="Search links, slug, publisher, postback URL..." value={search} onChange={(e) => setSearch(e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm md:col-span-2" />
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm">
+              <option value="all">All statuses</option>
+              <option value="active">active</option>
+              <option value="inactive">inactive</option>
+            </select>
           </div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="min-w-[1450px] w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">Link ID</th>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Slug</th>
-                <th className="px-4 py-3 font-medium">Campaign</th>
-                <th className="px-4 py-3 font-medium">Source</th>
-                <th className="px-4 py-3 font-medium">Publisher</th>
-                <th className="px-4 py-3 font-medium">Sub ID</th>
-                <th className="px-4 py-3 font-medium">CPC</th>
-                <th className="px-4 py-3 font-medium">Clicks</th>
-                <th className="px-4 py-3 font-medium">Leads</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">URL</th>
-              </tr>
-            </thead>
+      <div className="space-y-4">
+        {filteredLinks.length === 0 ? (
+          <div className="rounded-2xl border border-gray-200 bg-white px-6 py-12 text-center text-sm text-gray-500 shadow-sm">
+            No tracking links found.
+          </div>
+        ) : (
+          filteredLinks.map((link) => {
+            const expanded = expandedLinkId === link.id;
+            const draft = drafts[link.id] || {
+              publisherPostbackEnabled: link.publisherPostbackEnabled,
+              publisherPostbackUrl: link.publisherPostbackUrl || "",
+            };
+            const soldTemplate =
+              typeof window === "undefined" ? "" : buildSoldPostbackTemplate(window.location.origin, link);
 
-            <tbody>
-              {filteredLinks.length === 0 ? (
-                <tr>
-                  <td colSpan={12} className="px-4 py-12 text-center text-sm text-gray-500">
-                    No tracking links found.
-                  </td>
-                </tr>
-              ) : (
-                filteredLinks.map((link) => (
-                  <tr key={link.id} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-4 font-medium text-blue-700">
+            return (
+              <div key={link.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-col gap-4 border-b border-gray-200 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
                       {truncateId(link.id)}
-                    </td>
-                    <td className="px-4 py-4 font-medium text-gray-900">
-                      {link.name}
-                    </td>
-                    <td className="px-4 py-4">{link.slug}</td>
-                    <td className="px-4 py-4">{link.trackingCampaign?.name || "—"}</td>
-                    <td className="px-4 py-4">{link.trafficSource || "—"}</td>
-                    <td className="px-4 py-4">{link.publisherId || "—"}</td>
-                    <td className="px-4 py-4">{link.subId || "—"}</td>
-                    <td className="px-4 py-4">
-                      {link.costPerClick !== null && typeof link.costPerClick !== "undefined"
-                        ? `$${Number(link.costPerClick).toFixed(4)}`
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-4">{link._count?.clicks ?? 0}</td>
-                    <td className="px-4 py-4">{link._count?.leads ?? 0}</td>
-                    <td className="px-4 py-4">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusBadgeClass(
-                          link.status
-                        )}`}
-                      >
-                        {link.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <button
-                        onClick={() => copyTrackingUrl(link.slug)}
-                        className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100"
-                      >
-                        {copiedSlug === link.slug ? "Copied" : "Copy URL"}
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                    <h3 className="mt-2 text-xl font-semibold text-gray-900">{link.name}</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      /t/{link.slug} · {link.trackingCampaign?.name || "-"} · source {link.trafficSource || "-"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass(link.publisherPostbackEnabled)}`}>
+                      {link.publisherPostbackEnabled ? "publisher postback on" : "publisher postback off"}
+                    </span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass(link.status === "active")}`}>
+                      {link.status}
+                    </span>
+                    <button type="button" onClick={() => copyValue(`tracking-${link.id}`, `${window.location.origin}/t/${link.slug}`, "Tracking URL")} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100">
+                      {copiedKey === `tracking-${link.id}` ? "Copied URL" : "Copy URL"}
+                    </button>
+                    <button type="button" onClick={() => setExpandedLinkId(expanded ? null : link.id)} className="rounded-xl bg-black px-3 py-2 text-xs font-medium text-white">
+                      {expanded ? "Hide Postbacks" : "Manage Postbacks"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 px-6 py-5 md:grid-cols-4">
+                  <div><div className="text-xs uppercase tracking-[0.16em] text-gray-400">Publisher</div><div className="mt-2 text-sm text-gray-700">{link.publisherId || "-"}</div></div>
+                  <div><div className="text-xs uppercase tracking-[0.16em] text-gray-400">Sub ID</div><div className="mt-2 text-sm text-gray-700">{link.subId || "-"}</div></div>
+                  <div><div className="text-xs uppercase tracking-[0.16em] text-gray-400">CPC</div><div className="mt-2 text-sm text-gray-700">{toMoney(link.costPerClick)}</div></div>
+                  <div><div className="text-xs uppercase tracking-[0.16em] text-gray-400">Volume</div><div className="mt-2 text-sm text-gray-700">{link._count?.clicks ?? 0} clicks · {link._count?.leads ?? 0} leads</div></div>
+                </div>
+
+                {expanded ? (
+                  <div className="grid gap-4 border-t border-gray-200 bg-gray-50 px-6 py-5 xl:grid-cols-2">
+                    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Sold Conversion Intake</div>
+                          <h4 className="mt-2 text-lg font-semibold text-gray-900">Internal Postback Endpoint</h4>
+                          <p className="mt-1 text-sm text-gray-500">Use this with Everflow or another platform to tell RouteIQ the lead sold.</p>
+                        </div>
+                        <button type="button" onClick={() => copyValue(`sold-${link.id}`, soldTemplate, "Sold postback template")} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100">
+                          {copiedKey === `sold-${link.id}` ? "Copied" : "Copy Sold Postback"}
+                        </button>
+                      </div>
+                      <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 font-mono text-xs break-all text-gray-700">
+                        {soldTemplate}
+                      </div>
+                      <div className="mt-4 space-y-2 text-sm text-gray-600">
+                        <div>Accepted identifiers: `click_id` or `lead_id`</div>
+                        <div>Accepted revenue fields: `revenue`, `payout`, `amount`, `sale_amount`</div>
+                        <div>Optional `cost` lets you override spend before profit is recalculated.</div>
+                        <div>RouteIQ stores the attempt and can fan the conversion out to the publisher URL below.</div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600">Publisher Handoff</div>
+                          <h4 className="mt-2 text-lg font-semibold text-gray-900">Outbound Publisher Postback</h4>
+                          <p className="mt-1 text-sm text-gray-500">After RouteIQ records the sale, it can notify your publisher with revenue, cost, and profit tokens.</p>
+                        </div>
+                        <button type="button" onClick={() => copyValue(`secret-${link.id}`, link.postbackSecret, "Postback key")} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100">
+                          {copiedKey === `secret-${link.id}` ? "Copied Key" : "Copy Key"}
+                        </button>
+                      </div>
+
+                      <label className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+                        <input type="checkbox" checked={draft.publisherPostbackEnabled} onChange={(e) => updateDraft(link.id, "publisherPostbackEnabled", e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
+                        Enable outbound publisher postback
+                      </label>
+
+                      <textarea
+                        value={draft.publisherPostbackUrl}
+                        onChange={(e) => updateDraft(link.id, "publisherPostbackUrl", e.target.value)}
+                        rows={4}
+                        className="mt-3 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                        placeholder="https://publisher.example/postback?click_id={click_id}&payout={revenue}"
+                      />
+                      <div className="mt-2 text-xs text-gray-500">
+                        Supported placeholders: {"{click_id}"}, {"{lead_id}"}, {"{revenue}"}, {"{cost}"}, {"{profit}"}, {"{publisher_id}"}, {"{sub_id}"}, {"{tracking_link_id}"}.
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                        <div>Created: {formatDate(link.createdAt)}</div>
+                        <div className="mt-1">Last updated: {formatDate(link.updatedAt)}</div>
+                        <div className="mt-1 break-all">Postback key: {link.postbackSecret}</div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => savePostbackSettings(link)} disabled={savingLinkId === link.id} className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                          {savingLinkId === link.id ? "Saving..." : "Save Postback Settings"}
+                        </button>
+                        <button type="button" onClick={() => copyValue(`publisher-${link.id}`, draft.publisherPostbackUrl, "Publisher postback URL")} disabled={!draft.publisherPostbackUrl.trim()} className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50">
+                          {copiedKey === `publisher-${link.id}` ? "Copied URL" : "Copy Publisher URL"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

@@ -21,6 +21,7 @@ model Organization {
   trackingCampaigns TrackingCampaign[]
   trackingLinks     TrackingLink[]
   clickEvents       ClickEvent[]
+  conversionPostbacks ConversionPostback[]
 }
 
 model User {
@@ -192,6 +193,7 @@ model Lead {
 
   deliveries     Delivery[]
   pingResults    PingResult[]
+  conversionPostbacks ConversionPostback[]
 
   @@index([organizationId])
   @@index([campaignId])
@@ -281,6 +283,9 @@ model TrackingLink {
 
   destinationUrl     String?
   status             String   @default("active")
+  publisherPostbackEnabled Boolean @default(false)
+  publisherPostbackUrl String?
+  postbackSecret     String   @unique
 
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -289,6 +294,7 @@ model TrackingLink {
   trackingCampaign TrackingCampaign @relation(fields: [trackingCampaignId], references: [id])
   clicks           ClickEvent[]
   leads            Lead[]
+  conversionPostbacks ConversionPostback[]
 
   @@index([organizationId])
   @@index([trackingCampaignId])
@@ -332,5 +338,34 @@ model ClickEvent {
   @@index([trafficSource])
   @@index([publisherId])
   @@index([subId])
+  @@index([createdAt])
+}
+
+model ConversionPostback {
+  id              String   @id @default(uuid())
+  organizationId  String
+  trackingLinkId  String?
+  leadId          String?
+  clickId         String?
+  eventType       String   @default("sold")
+  source          String?
+  revenue         Decimal? @db.Decimal(10, 2)
+  cost            Decimal? @db.Decimal(10, 2)
+  profit          Decimal? @db.Decimal(10, 2)
+  targetUrl       String?
+  status          String   @default("skipped")
+  statusCode      Int?
+  responseBody    String?
+  error           String?
+  createdAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  trackingLink TrackingLink? @relation(fields: [trackingLinkId], references: [id])
+  lead         Lead? @relation(fields: [leadId], references: [id])
+
+  @@index([organizationId])
+  @@index([trackingLinkId])
+  @@index([leadId])
+  @@index([clickId])
   @@index([createdAt])
 }
