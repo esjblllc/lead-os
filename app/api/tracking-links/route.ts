@@ -26,6 +26,10 @@ export async function GET(req: Request) {
       include: {
         organization: true,
         trackingCampaign: true,
+        conversionPostbacks: {
+          orderBy: { createdAt: "desc" },
+          take: 8,
+        },
         _count: {
           select: {
             clicks: true,
@@ -168,6 +172,10 @@ export async function POST(req: Request) {
       include: {
         organization: true,
         trackingCampaign: true,
+        conversionPostbacks: {
+          orderBy: { createdAt: "desc" },
+          take: 8,
+        },
         _count: {
           select: {
             clicks: true,

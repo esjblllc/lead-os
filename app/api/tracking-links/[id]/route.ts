@@ -55,6 +55,10 @@ export async function PATCH(req: Request, context: RouteContext) {
       include: {
         organization: true,
         trackingCampaign: true,
+        conversionPostbacks: {
+          orderBy: { createdAt: "desc" },
+          take: 8,
+        },
         _count: {
           select: {
             clicks: true,

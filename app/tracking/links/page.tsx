@@ -33,9 +33,27 @@ type TrackingLink = {
   postbackSecret: string;
   createdAt: string;
   updatedAt: string;
+  conversionPostbacks?: ConversionPostback[];
   organization: Organization;
   trackingCampaign: TrackingCampaign;
   _count?: { clicks: number; leads: number };
+};
+
+type ConversionPostback = {
+  id: string;
+  leadId?: string | null;
+  clickId?: string | null;
+  eventType: string;
+  source?: string | null;
+  revenue?: number | string | null;
+  cost?: number | string | null;
+  profit?: number | string | null;
+  targetUrl?: string | null;
+  status: string;
+  statusCode?: number | null;
+  responseBody?: string | null;
+  error?: string | null;
+  createdAt: string;
 };
 
 type SessionUser = {
@@ -84,6 +102,12 @@ function toMoney(value: number | null | undefined) {
 
 function badgeClass(active: boolean) {
   return active ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600";
+}
+
+function statusTone(status: string) {
+  if (status === "success") return "bg-green-100 text-green-700";
+  if (status === "failed") return "bg-red-100 text-red-700";
+  return "bg-gray-100 text-gray-600";
 }
 
 function buildSoldPostbackTemplate(origin: string, link: TrackingLink) {
@@ -582,6 +606,88 @@ export default function TrackingLinksPage() {
                           {copiedKey === `publisher-${link.id}` ? "Copied URL" : "Copy Publisher URL"}
                         </button>
                       </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-gray-200 bg-white p-5 xl:col-span-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600">Postback Audit Trail</div>
+                          <h4 className="mt-2 text-lg font-semibold text-gray-900">Recent Conversion History</h4>
+                          <p className="mt-1 text-sm text-gray-500">
+                            Review the latest sold callbacks RouteIQ received and whether the outbound publisher postback succeeded.
+                          </p>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Showing {link.conversionPostbacks?.length ?? 0} recent events
+                        </div>
+                      </div>
+
+                      {link.conversionPostbacks && link.conversionPostbacks.length > 0 ? (
+                        <div className="mt-4 overflow-x-auto">
+                          <table className="min-w-[980px] w-full text-sm">
+                            <thead className="bg-gray-50 text-left text-gray-500">
+                              <tr>
+                                <th className="px-4 py-3 font-medium">When</th>
+                                <th className="px-4 py-3 font-medium">Status</th>
+                                <th className="px-4 py-3 font-medium">Lead / Click</th>
+                                <th className="px-4 py-3 font-medium">Source</th>
+                                <th className="px-4 py-3 font-medium">Revenue</th>
+                                <th className="px-4 py-3 font-medium">Cost</th>
+                                <th className="px-4 py-3 font-medium">Profit</th>
+                                <th className="px-4 py-3 font-medium">HTTP</th>
+                                <th className="px-4 py-3 font-medium">Publisher Target</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {link.conversionPostbacks.map((event) => (
+                                <tr key={event.id} className="border-t border-gray-100 align-top">
+                                  <td className="px-4 py-4 text-gray-700">{formatDate(event.createdAt)}</td>
+                                  <td className="px-4 py-4">
+                                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusTone(event.status)}`}>
+                                      {event.status}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-4 text-gray-700">
+                                    <div>{event.leadId ? `Lead ${truncateId(event.leadId)}` : "-"}</div>
+                                    <div className="mt-1 text-xs text-gray-500">{event.clickId || "-"}</div>
+                                  </td>
+                                  <td className="px-4 py-4 text-gray-700">{event.source || event.eventType}</td>
+                                  <td className="px-4 py-4 text-gray-700">{toMoney(event.revenue === null || typeof event.revenue === "undefined" ? null : Number(event.revenue))}</td>
+                                  <td className="px-4 py-4 text-gray-700">{toMoney(event.cost === null || typeof event.cost === "undefined" ? null : Number(event.cost))}</td>
+                                  <td className="px-4 py-4 text-gray-700">{toMoney(event.profit === null || typeof event.profit === "undefined" ? null : Number(event.profit))}</td>
+                                  <td className="px-4 py-4 text-gray-700">{event.statusCode ?? "-"}</td>
+                                  <td className="px-4 py-4 text-gray-700">
+                                    {event.targetUrl ? (
+                                      <details>
+                                        <summary className="cursor-pointer text-sm font-medium text-blue-600">View target</summary>
+                                        <div className="mt-2 break-all rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
+                                          {event.targetUrl}
+                                        </div>
+                                        {event.error ? (
+                                          <div className="mt-2 rounded-xl bg-red-50 p-3 text-xs text-red-700">
+                                            {event.error}
+                                          </div>
+                                        ) : null}
+                                        {event.responseBody ? (
+                                          <div className="mt-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
+                                            {event.responseBody}
+                                          </div>
+                                        ) : null}
+                                      </details>
+                                    ) : (
+                                      <span className="text-gray-400">No outbound publisher URL</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-sm text-gray-500">
+                          No conversion postbacks have been recorded for this link yet. Once Everflow or another source hits the sold endpoint, the latest attempts will show up here.
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : null}
